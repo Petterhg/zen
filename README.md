@@ -31,18 +31,49 @@ Use the **Inline suggestions** control to choose Off, On request (default), or A
 
 To explore an existing service, say “Explore `services/ner`: trace its entrypoints, extraction flow and callers, and tell me what remains unchecked.” Pair delegates research to a separate context. The explorer starts with that directory and follows relevant references outward; the main conversation receives a compact findings report with file/line evidence. Repository exploration uses local tools by default. Ask explicitly for external documentation when you also want web research. Exploration proposes no edits; request an implementation separately. Known files can be read in batches, and native text search overlays unsaved buffers. Compact explorer findings stay available within the voice session and are marked stale after edits. Changing the assistance slider preserves ongoing research and waits for quiet playback before updating the speaker; the new local setting applies immediately.
 
-## What this foundation contains
+## Features
 
-- An isolated, lightly branded VSCodium runtime built from Code-OSS; pinned upstream source checkout and repeatable source overlays.
-- A minimal default layout and restrained Graphite theme.
-- Continuous GPT-Live WebRTC integration using the documented `/v1/live/sessions` API and client delegation.
-- Groq/Cerebras Qwen adapters with pageable tools, cancellation, failure recovery, and manual proposal acceptance.
-- Cursor, selection, viewport, unsaved-buffer, diagnostics, and recent-file context; acknowledged voice-context tracking.
-- Spoken code pointing with a separate editor highlight and a Follow Pair scrolling toggle. Normal editor windows preserve unsaved buffers across reloads.
-- Service-scoped file discovery and search, direct unsaved-buffer reads, language-service definitions/references/calls, diagnostics, and Git diff. An isolated read-only explorer returns compact findings. Optional Firecrawl web search/page fetch.
-- Toggleable native inline insertion suggestions.
-- A scoped microphone permission patch: our panel may request audio; other webviews and camera requests remain blocked.
-- TypeScript/JavaScript language diagnostics and formatting inherited from Code-OSS. Pinned ESLint, Prettier, Microsoft Python, BasedPyright, and native Ruff editor extensions are installed by bootstrap; project lint rules require that project’s ESLint configuration. Python supports hover information, ⌘click/F12 definitions, cross-file references, basic type diagnostics, Ruff linting, and formatting on save. Use **Python: Select Interpreter** for the project environment; installed dependencies determine third-party import navigation. Project Ruff configuration takes precedence over editor defaults. Additional language tooling can be installed through Open VSX.
+These features are implemented in the prototype; this is not a production-readiness checklist. The development runtime currently targets macOS on Apple Silicon.
+
+| Area                | Available today                                                                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor              | File navigator, tabs, terminal, minimal Graphite layout, and pinned Code-OSS/VSCodium runtime.                                                                             |
+| Voice pairing       | Continuous GPT-Live conversation with Groq/Cerebras delegation, mute/disconnect controls, and local session diagnostics.                                                   |
+| Shared context      | Active file, selection, cursor, viewport, unsaved buffers, diagnostics, and recent files.                                                                                  |
+| Human control       | Assistance slider from voice-only guidance to larger code proposals; inline suggestions can be off, on request, or automatic.                                              |
+| Inline edits        | Native proposals with accept/reject, Command+Enter acceptance, undo, and stale-buffer protection.                                                                          |
+| Code pointing       | Spoken explanations can highlight code; Follow Pair controls automatic scrolling.                                                                                          |
+| Project exploration | Isolated read-only researcher, scoped file/text search, batched reads, and language-service references.                                                                    |
+| Semantic retrieval  | Local Turso index, OpenAI small embeddings at 768 dimensions, hybrid search, service/repository filters, incremental updates, and unsaved-buffer handling.                 |
+| External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                       |
+| Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap. |
+| Collaboration       | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                       |
+
+## Roadmap
+
+Ordered by current priority, not promised release dates. Completed work moves into Features after it is merged; open PRs remain identified here. Update this section in the same PR when user-visible capability or priority changes.
+
+### Next milestone: explain → edit → verify
+
+**Goal:** Select a function, ask for an explanation, make a guided change, and have the assistant notice and help verify it. The human stays in control of how much code the assistant writes.
+
+- [ ] **Repair Python environment discovery.** Bundle a working `pet` helper for the supported platform and verify it during setup. Selecting an existing interpreter must not mask broken environment discovery.
+- [ ] **Make indexing observable.** Show phases, file progress, current file, chunk counts and visible failures. Implementation is in [PR #1](https://github.com/Petterhg/zen/pull/1), pending merge.
+- [ ] **Evaluate retrieval on real coding questions.** Measure relevant results, missed evidence, lookup latency and backend rounds for service explanations and impact questions. Keep private evaluation content out of public fixtures.
+- [ ] **Make coaching respond to human edits.** Recognize a completed step, use current buffers and diagnostics, and continue without stale instructions, repeated acknowledgments or interrupted speech.
+- [ ] **Strengthen impact analysis.** Combine semantic matches with definitions, references, imports and relevant tests; distinguish verified dependencies from inference and incomplete coverage.
+- [ ] **Close the validation loop.** After human edits or accepted proposals, inspect diagnostics and support explicitly authorized formatter/test execution with concise, truthful results.
+
+Milestone acceptance: demonstrate this interaction on an existing service at voice-only and assisted-edit settings; preserve the requested target through tab changes, reject stale edits, keep typing/slider updates from interrupting speech, and report what was actually verified. Record offline checks separately from real provider and human voice validation.
+
+### Later
+
+- [ ] Persistent project knowledge with source/version tracking and invalidation.
+- [ ] MCP and third-party tool integrations with clear permissions.
+- [ ] Parallel exploration for broad, independent research where measurements justify the added complexity.
+- [ ] Retrieval scaling and additional language-aware chunking based on evaluation results.
+- [ ] Better concurrent-edit reconciliation and broader workspace/remote-development support.
+- [ ] Additional desktop platforms and a signed release/update pipeline.
 
 This is a local development foundation using the pinned Code-OSS native inline-edit renderer and proposed API. It is not yet a signed production editor. The sidebar shows voice controls, settings, and sources from web research; conversation transcripts and backend summaries stay in the local session trace, available through **Open session trace**. Durable project knowledge, service dependency catalogs, command/test execution, remote development, MCP integrations, and concurrent-edit rebasing are future work. Language-service references provide local impact evidence; they do not establish complete cross-service coverage.
 
