@@ -1,0 +1,46 @@
+{
+  "source": "https://github.com/microsoft/vscode.git",
+  "ref": "1.135.0",
+  "commit": "08d4889f9ec4a1685d257b9b95de036c8e1ce1e5",
+  "runtime": "https://github.com/VSCodium/vscodium/releases/download/1.135.06055/VSCodium-darwin-arm64-1.135.06055.zip",
+  "runtimeVersion": "1.135.06055",
+  "platform": "darwin-arm64",
+  "note": "Prebuilt runtime for rapid local iteration; source overlays are maintained separately.",
+  "tooling": [
+    {
+      "id": "dbaeumer.vscode-eslint",
+      "version": "3.0.34",
+      "url": "https://open-vsx.org/api/dbaeumer/vscode-eslint/3.0.34/file/dbaeumer.vscode-eslint-3.0.34.vsix"
+    },
+    {
+      "id": "esbenp.prettier-vscode",
+      "version": "12.4.0",
+      "url": "https://open-vsx.org/api/esbenp/prettier-vscode/12.4.0/file/esbenp.prettier-vscode-12.4.0.vsix"
+    },
+    {
+      "id": "ms-python.debugpy",
+      "version": "2026.6.0",
+      "url": "https://open-vsx.org/api/ms-python/debugpy/darwin-arm64/2026.6.0/file/ms-python.debugpy-2026.6.0@darwin-arm64.vsix"
+    },
+    {
+      "id": "ms-python.vscode-python-envs",
+      "version": "1.38.0",
+      "url": "https://open-vsx.org/api/ms-python/vscode-python-envs/1.38.0/file/ms-python.vscode-python-envs-1.38.0.vsix"
+    },
+    {
+      "id": "ms-python.python",
+      "version": "2026.4.0",
+      "url": "https://open-vsx.org/api/ms-python/python/2026.4.0/file/ms-python.python-2026.4.0.vsix"
+    },
+    {
+      "id": "detachhead.basedpyright",
+      "version": "1.40.2",
+      "url": "https://open-vsx.org/api/detachhead/basedpyright/1.40.2/file/detachhead.basedpyright-1.40.2.vsix"
+    },
+    {
+      "id": "charliermarsh.ruff",
+      "version": "2026.84.0",
+      "url": "https://open-vsx.org/api/charliermarsh/ruff/darwin-arm64/2026.84.0/file/charliermarsh.ruff-2026.84.0@darwin-arm64.vsix"
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- prettier-ignore -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}}; script-src 'nonce-{{nonce}}'; media-src blob:; connect-src 'none'; img-src {{cspSource}};" />
+    <link rel="stylesheet" href="{{css}}" />
+    <title>Pair</title>
+  </head>
+  <body>
+    <header class="identity">
+      <span class="wordmark">pair<span class="period">.</span></span
+      ><button
+        id="configure"
+        class="icon-button"
+        title="Configure API keys"
+        aria-label="Configure API keys"
+      >
+        ⚙
+      </button>
+    </header>
+    <main>
+      <section class="voice-card" aria-label="Voice pairing">
+        <div class="voice-mark" id="voiceMark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <h1 id="voiceTitle">A little closer to the code.</h1>
+        <p id="voiceDescription">Think out loud. Your pair follows along.</p>
+        <div class="session-controls">
+          <button id="connect" class="primary">Start Pairing</button>
+          <button id="mute" class="secondary hidden">Mute</button>
+          <button
+            id="disconnect"
+            class="icon-button hidden"
+            aria-label="End voice session"
+            title="End voice session"
+          >
+            ×
+          </button>
+        </div>
+        <div class="connection-line">
+          <span class="status-dot" id="statusDot"></span
+          ><span id="voiceStatus">Voice is disconnected</span>
+        </div>
+        <audio id="audio" autoplay></audio>
+        <button id="playAudio" class="text-button hidden">
+          Play Assistant Audio
+        </button>
+      </section>
+      <section class="context-bar" aria-label="Shared editor context">
+        <span class="file-icon" aria-hidden="true">⌘</span
+        ><span id="contextFile">No shared file</span
+        ><span id="selectionBadge"></span>
+      </section>
+      <div id="setup" class="setup-note">
+        <span>Connect your models to begin.</span
+        ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
+      </div>
+      <section class="research" aria-label="Research and documentation">
+        <div class="research-heading">
+          <span class="eyebrow">RESEARCH</span
+          ><button id="clearResearch" class="text-button">Clear</button>
+        </div>
+        <p id="researchEmpty" class="quiet-note">
+          Documentation your pair reads appears here.<br />Code suggestions
+          appear in the editor.
+        </p>
+        <div id="researchPages"></div>
+      </section>
+      <p
+        id="editStatus"
+        class="quiet-note"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <div id="error" class="error hidden" role="alert"></div>
+      <div class="settings-row">
+        <span id="indexStatus">Code index starting…</span
+        ><button
+          id="refreshIndex"
+          class="text-button"
+          title="Refresh code index"
+        >
+          ↻
+        </button>
+      </div>
+      <div id="backendActivity" class="backend-activity hidden">
+        <span class="working-dot"></span><span>Thinking about your code…</span
+        ><button id="cancel" class="text-button">Stop</button>
+      </div>
+      <section class="pairing-style" aria-label="Pairing style">
+        <div class="pairing-style-heading">
+          <label for="assistanceLevel">How much Pair does</label
+          ><output id="assistanceLabel" for="assistanceLevel"
+            >One small step</output
+          >
+        </div>
+        <input
+          id="assistanceLevel"
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value="25"
+          aria-describedby="assistanceDescription"
+        />
+        <div class="pairing-style-endpoints">
+          <span>Do nothing</span><span>Draft it for me</span>
+        </div>
+        <p id="assistanceDescription" class="quiet-note">
+          Explain one small step, then wait. Tiny previews when requested.
+        </p>
+      </section>
+      <form id="composer" class="composer">
+        <label for="message" class="sr-only">Message your pair</label
+        ><textarea
+          id="message"
+          rows="2"
+          placeholder="Or ask for a change…"
+        ></textarea
+        ><button
+          class="send-button"
+          id="send"
+          aria-label="Send message"
+          title="Send message"
+        >
+          ↑
+        </button>
+      </form>
+      <div class="context-bar">
+        <label for="inlineMode">Inline suggestions</label
+        ><select id="inlineMode">
+          <option value="off">Off</option>
+          <option value="manual">On request</option>
+          <option value="automatic">Automatic</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label
+          ><input type="checkbox" id="shareContext" checked /> Share editor
+          context</label
+        ><button id="showTrace" class="text-button">Open session trace</button>
+      </div>
+      <div class="settings-row">
+        <label
+          ><input type="checkbox" id="followPair" checked /> Follow Pair in the
+          editor</label
+        >
+      </div>
+      <p id="deliveryStatus" class="stale" aria-live="polite"></p>
+      <footer>
+        <span class="model-label">gpt-live-1</span
+        ><span class="footer-separator">/</span
+        ><label class="sr-only" for="provider">Code backend</label
+        ><select id="provider">
+          <option value="groq">Groq</option>
+          <option value="cerebras">Cerebras</option></select
+        ><span class="footer-right" id="contextSharing">Editor context on</span>
+      </footer>
+    </main>
+    <script nonce="{{nonce}}" src="{{protocol}}"></script>
+    <script nonce="{{nonce}}" src="{{js}}"></script>
+  </body>
+</html>

@@ -1,0 +1,153 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
+import { build } from "esbuild";
+import type { IndexService } from "../extension/src/index-service.js";
+const requireNative = createRequire(import.meta.url);
+const bundled = await build({
+  entryPoints: [
+    path.resolve(import.meta.dirname, "../extension/src/index-service.ts"),
+  ],
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  external: ["vscode", "@tursodatabase/database", "web-tree-sitter"],
+  write: false,
+});
+test("editor integration indexes permitted sources, overlays dirty buffers, excludes ignored/deleted results, and stops when sharing is disabled", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "pair-index-service-"));
+  const storage = await mkdtemp(path.join(tmpdir(), "pair-index-storage-"));
+  t.after(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(storage, { recursive: true, force: true });
+  });
+  await mkdir(path.join(root, "services/auth"), { recursive: true });
+  const file = path.join(root, "services/auth/main.py");
+  await writeFile(file, "def authorize():\n    return True\n");
+  await writeFile(path.join(root, "services/auth/.env"), "SECRET_MARKER=value");
+  const events = new Map<string, (event: unknown) => void>();
+  const event = (name: string) => (callback: (e: unknown) => void) => {
+    events.set(name, callback);
+    return { dispose() {} };
+  };
+  const docs: {
+    uri: { scheme: string; fsPath: string };
+    isDirty: boolean;
+    version: number;
+    getText: () => string;
+  }[] = [];
+  let enabled = true,
+    requests = 0;
+  const mock = {
+    workspace: {
+      isTrusted: true,
+      workspaceFolders: [
+        { name: "test-repo", uri: { scheme: "file", fsPath: root } },
+      ],
+      textDocuments: docs,
+      createFileSystemWatcher: () => ({
+        dispose() {},
+        onDidCreate: event("create"),
+        onDidChange: event("change"),
+        onDidDelete: event("delete"),
+      }),
+      onDidChangeTextDocument: event("document"),
+      onDidCloseTextDocument: event("close"),
+      onDidSaveTextDocument: event("save"),
+      onDidChangeWorkspaceFolders: event("folders"),
+      onDidChangeConfiguration: event("config"),
+    },
+    window: { activeTextEditor: undefined },
+    env: {
+      appRoot: path.resolve(
+        import.meta.dirname,
+        "../.runtime/VSCodium.app/Contents/Resources/app",
+      ),
+    },
+  };
+  const previous = globalThis.fetch;
+  globalThis.fetch = (async (_url, init) => {
+    requests++;
+    const body = JSON.parse(String(init?.body));
+    assert.doesNotMatch(JSON.stringify(body), /SECRET_MARKER/);
+    return Response.json({
+      data: body.input.map((text: string, index: number) => ({
+        index,
+        embedding: Array.from({ length: 768 }, (_, i) =>
+          Number(i === (text.includes("authorize") ? 0 : 1)),
+        ),
+      })),
+    });
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = previous;
+  });
+  const mod: { exports: { IndexService?: typeof IndexService } } = {
+    exports: {},
+  };
+  new Function("require", "module", "exports", bundled.outputFiles[0].text)(
+    (name: string) => (name === "vscode" ? mock : requireNative(name)),
+    mod,
+    mod.exports,
+  );
+  const service = new mod.exports.IndexService!(
+    {
+      extensionPath: path.resolve(import.meta.dirname, "../extension"),
+      globalStorageUri: { fsPath: storage },
+    } as never,
+    async () => "fake",
+    () => enabled,
+    () => {},
+  );
+  t.after(() => service.dispose());
+  const ready = async () => {
+    const deadline = Date.now() + 10000;
+    while (
+      service.status.state !== "ready" &&
+      service.status.state !== "error" &&
+      Date.now() < deadline
+    )
+      await new Promise((r) => setTimeout(r, 50));
+    assert.equal(service.status.state, "ready", service.status.error);
+  };
+  await ready();
+  assert.equal(service.status.files, 1);
+  const search = async (query: string) =>
+    (await service.search(
+      {
+        query,
+        repository: "test-repo",
+        service: "services/auth",
+        scope: "test-repo/services/auth",
+      },
+      new AbortController().signal,
+    )) as { matches: { text: string; unsaved?: boolean }[] };
+  assert.ok((await search("authorize")).matches[0].text.includes("authorize"));
+  docs.push({
+    uri: { scheme: "file", fsPath: file },
+    isDirty: true,
+    version: 2,
+    getText: () => "def revoke():\n    return False\n",
+  });
+  const dirty = await search("revoke");
+  assert.ok(dirty.matches.some((m) => m.unsaved && m.text.includes("revoke")));
+  assert.ok(dirty.matches.every((m) => !m.text.includes("authorize")));
+  await writeFile(path.join(root, ".pairignore"), "services/auth/\n");
+  assert.equal((await search("revoke")).matches.length, 0);
+  const before = requests;
+  enabled = false;
+  service.refresh();
+  await assert.rejects(() => search("new request"), /disabled/);
+  assert.equal(requests, before);
+  enabled = true;
+  docs.length = 0;
+  await rm(path.join(root, ".pairignore"));
+  await rm(file);
+  service.refresh();
+  await new Promise((r) => setTimeout(r, 1400));
+  await ready();
+  assert.equal(service.status.files, 0);
+});

@@ -1,0 +1,58 @@
+{
+  "name": "Pair Graphite",
+  "colors": {
+    "editor.background": "#181a1e",
+    "editor.foreground": "#d5d8df",
+    "editorLineNumber.foreground": "#525965",
+    "editorLineNumber.activeForeground": "#adb3bc",
+    "sideBar.background": "#15171b",
+    "sideBar.foreground": "#adb3bc",
+    "sideBar.border": "#25282f",
+    "sideBarSectionHeader.background": "#15171b",
+    "activityBar.background": "#15171b",
+    "statusBar.background": "#15171b",
+    "statusBar.foreground": "#7b838f",
+    "statusBar.border": "#25282f",
+    "titleBar.activeBackground": "#15171b",
+    "titleBar.activeForeground": "#aab0ba",
+    "titleBar.inactiveBackground": "#15171b",
+    "editorGroupHeader.tabsBackground": "#15171b",
+    "tab.activeBackground": "#181a1e",
+    "tab.inactiveBackground": "#15171b",
+    "tab.border": "#15171b",
+    "tab.activeBorderTop": "#82b7a2",
+    "panel.background": "#15171b",
+    "panel.border": "#25282f",
+    "terminal.background": "#15171b",
+    "terminal.foreground": "#b9bfc9",
+    "input.background": "#1e2127",
+    "input.border": "#343a44",
+    "input.foreground": "#d5d8df",
+    "focusBorder": "#82b7a260",
+    "button.background": "#82b7a2",
+    "button.foreground": "#101714",
+    "button.hoverBackground": "#96c5b2",
+    "list.activeSelectionBackground": "#282e35",
+    "list.hoverBackground": "#20242a",
+    "editor.selectionBackground": "#354b5066",
+    "editorWidget.background": "#20242a",
+    "editorWidget.border": "#343a44",
+    "widget.border": "#343a44"
+  },
+  "tokenColors": [
+    { "scope": ["comment"], "settings": { "foreground": "#737e8b" } },
+    {
+      "scope": ["keyword", "storage"],
+      "settings": { "foreground": "#b5a2d1" }
+    },
+    { "scope": ["string"], "settings": { "foreground": "#a4b995" } },
+    {
+      "scope": ["entity.name.function", "support.function"],
+      "settings": { "foreground": "#94b8ce" }
+    },
+    {
+      "scope": ["constant.numeric", "constant.language"],
+      "settings": { "foreground": "#d0b58a" }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "zen-editor",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "A minimal Code-OSS editor for continuous voice pairing.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "start": "node scripts/launch.mjs",
+    "patch:runtime": "node scripts/patch-runtime.mjs",
+    "patch:source": "node scripts/patch-source.mjs",
+    "format": "prettier --write extension/src extension/media scripts test docs README.md",
+    "lint": "eslint extension/src extension/media scripts test",
+    "tooling": "node scripts/install-tooling.mjs",
+    "test:ui": "node scripts/ui-smoke.mjs",
+    "test:panel": "node scripts/test-panel.mjs",
+    "validate": "npm run check && npm run lint && npm run build && npm test && npm run test:panel"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.135.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "playwright": "^1.55.0",
+    "prettier": "^3.6.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "dependencies": {
+    "@tursodatabase/database": "0.8.2",
+    "ignore": "5.3.2",
+    "tree-sitter-wasms": "0.1.13",
+    "web-tree-sitter": "0.20.8"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Petterhg/zen.git"
+  }
+}

@@ -1,0 +1,207 @@
+{
+  "name": "pair-code",
+  "displayName": "Pair Code",
+  "publisher": "pair-code",
+  "version": "0.2.0",
+  "description": "Continuous voice pairing, grounded in the current editor.",
+  "engines": {
+    "vscode": "^1.135.0"
+  },
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Pairing sends selected code to model providers only in a trusted workspace."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "pairCode",
+          "title": "Pair",
+          "icon": "media/pair.svg"
+        }
+      ]
+    },
+    "views": {
+      "pairCode": [
+        {
+          "type": "webview",
+          "id": "pairCode.companion",
+          "name": "Pair",
+          "contextualTitle": "Pair"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pairCode.open",
+        "title": "Pair Code: Open Companion"
+      },
+      {
+        "command": "pairCode.configure",
+        "title": "Pair Code: Configure API Keys"
+      },
+      {
+        "command": "pairCode.accept",
+        "title": "Pair Code: Accept Proposed Edit"
+      },
+      {
+        "command": "pairCode.reject",
+        "title": "Pair Code: Reject Proposed Edit"
+      },
+      {
+        "command": "pairCode.cancel",
+        "title": "Pair Code: Cancel Backend Work"
+      },
+      {
+        "command": "pairCode.suggest",
+        "title": "Pair Code: Suggest an Edit to Selection"
+      },
+      {
+        "command": "pairCode.inline",
+        "title": "Pair Code: Suggest Inline"
+      },
+      {
+        "command": "pairCode.showTrace",
+        "title": "Pair Code: Open Session Trace"
+      },
+      {
+        "command": "pairCode.refreshIndex",
+        "title": "Pair Code: Refresh Code Index"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "pairCode.open",
+        "key": "ctrl+alt+space",
+        "mac": "cmd+alt+space"
+      },
+      {
+        "command": "pairCode.accept",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "pairCode.hasProposal && editorTextFocus"
+      },
+      {
+        "command": "pairCode.reject",
+        "key": "escape",
+        "when": "pairCode.hasProposal && editorTextFocus"
+      },
+      {
+        "command": "pairCode.suggest",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "pairCode.inline",
+        "key": "alt+\\",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "pairCode.accept",
+        "key": "tab",
+        "when": "pairCode.hasProposal && inlineEditVisible && editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Pair Code",
+      "properties": {
+        "pairCode.backend": {
+          "type": "string",
+          "enum": [
+            "groq",
+            "cerebras"
+          ],
+          "default": "groq",
+          "description": "Provider for code reasoning and edit proposals."
+        },
+        "pairCode.groqModel": {
+          "type": "string",
+          "default": "qwen/qwen3.8-27b",
+          "description": "Groq model ID."
+        },
+        "pairCode.cerebrasModel": {
+          "type": "string",
+          "default": "qwen-3.8-27b",
+          "description": "Cerebras model ID. Availability depends on your account."
+        },
+        "pairCode.voice": {
+          "type": "string",
+          "default": "marin",
+          "description": "GPT-Live voice. Reconnect after changing."
+        },
+        "pairCode.shareEditorContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send the active editor's bounded context to the voice/backend model during pairing."
+        },
+        "pairCode.reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "none",
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "auto",
+          "description": "Auto uses OpenAI Decisions to route task complexity, falling back to medium. Manual options bypass routing. Inline predictions use none."
+        },
+        "pairCode.inlineSuggestions": {
+          "type": "string",
+          "enum": [
+            "off",
+            "manual",
+            "automatic"
+          ],
+          "default": "manual",
+          "description": "Inline insertion predictions. Off stops requests. On request uses Pair Code: Suggest Inline."
+        },
+        "pairCode.traceEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Record local development session transcripts, backend token usage and tool events. No API keys, source snapshots or private model reasoning are recorded. Disable to stop new trace writes."
+        },
+        "pairCode.followPair": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reveal the code Pair mentions. Highlights remain visible when disabled; your typing cursor is preserved."
+        },
+        "pairCode.assistanceLevel": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 25,
+          "description": "How much Pair does: 0 gives voice guidance only without code generation or inline completions, 25 takes one small step, 50 builds together, 75 drafts a section, 100 drafts the requested implementation. Previews always require acceptance."
+        },
+        "pairCode.backendTimeoutSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "default": 600,
+          "description": "Total backend task deadline in seconds. Set 0 to disable the total deadline; cancellation and per-request network timeouts remain active."
+        },
+        "pairCode.indexEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Index permitted workspace code locally with Turso. Sends code chunks to OpenAI text-embedding-3-small (768 dimensions). Updates in the background; requires context sharing and an OpenAI key."
+        }
+      }
+    },
+    "themes": [
+      {
+        "label": "Pair Graphite",
+        "uiTheme": "vs-dark",
+        "path": "./media/theme.json"
+      }
+    ]
+  },
+  "enabledApiProposals": [
+    "inlineCompletionsAdditions"
+  ]
+}

@@ -1,0 +1,20 @@
+node_modules/
+.runtime/
+.upstream/
+.cache/
+extension/dist/
+artifacts/
+.env
+.env.*
+!.env.example
+.DS_Store
+extension/media/live-protocol.js
+
+# Local experiments, provider traces and index databases
+demo/local/
+*.log
+*.jsonl
+*.db
+*.db-*
+*.sqlite*
+.codex/config.local.toml
