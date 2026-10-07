@@ -18,6 +18,7 @@ try {
     route.fulfill({ contentType: "text/html", body: html }),
   );
   await page.goto("https://pair.test/");
+  await page.addStyleTag({ path: "extension/media/panel.css" });
   await page.evaluate(() => {
     window.sent = [];
     window.peers = [];
@@ -121,6 +122,38 @@ try {
   });
   await page.addScriptTag({ path: "extension/media/live-protocol.js" });
   await page.addScriptTag({ path: "extension/media/panel.js" });
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "indexing",
+      processed: 3,
+      total: 10,
+      currentFile: "src/main.py",
+      repository: "demo",
+      embedded: 4,
+      reused: 2,
+    }),
+  );
+  assert.match(await page.locator("#indexStatus").textContent(), /3 \/ 10/);
+  assert.equal(await page.locator("#indexProgress").getAttribute("value"), "3");
+  assert.match(
+    await page.locator("#indexDetail").textContent(),
+    /src\/main.py/,
+  );
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "error",
+      error: "Embedding request failed (429).",
+    }),
+  );
+  assert.equal(await page.locator("#indexError").isVisible(), true);
+  assert.match(await page.locator("#indexError").textContent(), /429/);
+  await page.evaluate(() =>
+    window.host({ type: "indexStatus", state: "ready", files: 8 }),
+  );
+  assert.equal(await page.locator("#indexProgress").isVisible(), false);
+  assert.equal(await page.locator("#indexError").isVisible(), false);
   assert.equal(
     await page.locator("#assistanceLevel").getAttribute("step"),
     "1",

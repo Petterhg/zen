@@ -2,7 +2,7 @@
   "name": "pair-code",
   "displayName": "Pair Code",
   "publisher": "pair-code",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Continuous voice pairing, grounded in the current editor.",
   "engines": {
     "vscode": "^1.135.0"

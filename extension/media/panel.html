@@ -75,16 +75,25 @@
         aria-live="polite"
       ></p>
       <div id="error" class="error hidden" role="alert"></div>
-      <div class="settings-row">
-        <span id="indexStatus">Code index starting…</span
-        ><button
-          id="refreshIndex"
-          class="text-button"
-          title="Refresh code index"
-        >
-          ↻
-        </button>
-      </div>
+      <section class="code-index" aria-label="Code indexing">
+        <div class="settings-row">
+          <span id="indexStatus" role="status">Code index starting…</span
+          ><button
+            id="refreshIndex"
+            class="text-button"
+            title="Refresh code index"
+          >
+            ↻
+          </button>
+        </div>
+        <progress
+          id="indexProgress"
+          class="hidden"
+          aria-label="Files checked in current repository"
+        ></progress>
+        <p id="indexDetail" class="quiet-note"></p>
+        <p id="indexError" class="error hidden" role="alert"></p>
+      </section>
       <div id="backendActivity" class="backend-activity hidden">
         <span class="working-dot"></span><span>Thinking about your code…</span
         ><button id="cancel" class="text-button">Stop</button>

@@ -30,6 +30,11 @@ export interface IndexStatus {
   embedded: number;
   reused: number;
   error?: string;
+  processed?: number;
+  total?: number;
+  repository?: string;
+  currentFile?: string;
+  updatedAt?: number;
 }
 /** Coordinates background indexing only. Retrieval never waits for a complete repository scan. */
 export class IndexService implements vscode.Disposable {
@@ -82,7 +87,7 @@ export class IndexService implements vscode.Disposable {
     this.schedule(undefined, true);
   }
   private publish(state: string, error?: string) {
-    this.status = { ...this.status, state, error };
+    this.status = { ...this.status, state, error, updatedAt: Date.now() };
     this.changed(this.status);
   }
   private guard() {
@@ -114,6 +119,7 @@ export class IndexService implements vscode.Disposable {
   private start() {
     if (this.job || !this.enabled() || !vscode.workspace.isTrusted) {
       if (!this.enabled()) this.publish("paused");
+      else if (!vscode.workspace.isTrusted) this.publish("untrusted");
       return;
     }
     const signal = this.lifetime.signal;
@@ -203,6 +209,9 @@ export class IndexService implements vscode.Disposable {
       .relative(entry.root.path, file)
       .split(path.sep)
       .join("/");
+    this.status.currentFile = relative;
+    this.status.repository = entry.root.name;
+    this.publish(this.status.state);
     let text: string | undefined;
     try {
       text = await this.source(entry, file, signal);
@@ -259,11 +268,25 @@ export class IndexService implements vscode.Disposable {
     this.guard();
     await this.initialize();
     signal.throwIfAborted();
-    this.publish("indexing");
+    this.status = {
+      ...this.status,
+      processed: 0,
+      total: undefined,
+      currentFile: undefined,
+      repository: undefined,
+      embedded: 0,
+      reused: 0,
+    };
     const full = this.full;
+    this.publish(full ? "scanning" : "updating");
     this.full = false;
     if (full)
       for (const entry of this.roots.values()) {
+        this.status.repository = entry.root.name;
+        this.status.processed = 0;
+        this.status.total = undefined;
+        this.status.currentFile = undefined;
+        this.publish("scanning");
         const discovered = new Set<string>();
         entry.packages.clear();
         for await (const file of this.discovery(entry.root).walk(signal)) {
@@ -286,16 +309,23 @@ export class IndexService implements vscode.Disposable {
         const files = [...discovered].sort(
           (a, b) => Number(b === active) - Number(a === active),
         );
+        this.status.total = files.length;
+        this.publish("indexing");
         let done = 0;
         for (const file of files) {
           signal.throwIfAborted();
           await this.drain(signal);
           await this.update(entry, file, signal);
-          if (++done % 10 === 0) this.publish("indexing");
+          this.status.processed = ++done;
+          this.publish("indexing");
           await new Promise<void>((resolve) => setImmediate(resolve));
         }
         await index.pruneCache();
       }
+    if (this.pending.size) {
+      this.status.total = undefined;
+      this.publish("updating");
+    }
     while (this.pending.size) {
       signal.throwIfAborted();
       await this.drain(signal);
@@ -303,6 +333,7 @@ export class IndexService implements vscode.Disposable {
     this.status.files = 0;
     for (const entry of this.roots.values())
       this.status.files += (await (await entry.index).paths()).length;
+    this.status.currentFile = undefined;
     this.publish("ready");
   }
   tools(): BackendTool[] {
