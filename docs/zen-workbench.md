@@ -2,6 +2,10 @@
 
 Design study and interactive example, 8 October 2026. The first appearance slice now runs in the native editor; task workflows below are still a browser prototype.
 
+## Current scope
+
+Focus on one human and the voice assistant, personal memory and editor UI. The issue/PR lifecycle, specialist controls and colleague collaboration below are retained design explorations, deferred from the active roadmap. The prototype is not a feature checklist. Individual session continuity should work without tickets, boards or a shared room. [README](../README.md#roadmap) is the current priority source.
+
 ## Native slice implemented
 
 Zen Light and Zen Dark ship as native TextMate/semantic themes with restrained function, import, type, string and number colors. Native editor and terminal spacing, tabs and separators use the same palette. The live pairing webview has a folding workboard, collapsed settings, visible research/errors and voice controls anchored below its scrollable content. The theme button updates the editor theme; folding retains the webview and its transport. Existing inline edit acceptance and language tooling are unchanged.
@@ -109,7 +113,7 @@ Both people run Zen and edit the shared project concurrently, with independent c
 
 The proposed implementation combines synchronized text buffers with a host-authoritative filesystem journal. Private memory and credentials are never part of the shared workspace. Host disconnection pauses the assistant rather than launching a second one on the guest. See the [detailed two-client contract and acceptance checks](local-memory-and-shared-tasks.md#shared-code-and-filesystem).
 
-## Bringing this into the actual editor
+## Earlier full-product rollout (deferred beyond the core UI)
 
 1. **Appearance and layout:** translate the palette into the built-in theme and set calm defaults in the maintained runtime/source patch scripts. Hide redundant chrome by default; retain escape hatches. Verify dark/light contrast, keyboard access, zoom and terminal rendering in a disposable native window.
 2. **Native task shell:** replace the generic top chrome with compact project/task identity and add a persistent voice strip. Reuse Code-OSS layout services, Monaco, xterm, language tooling and native proposal renderer. Implement the workboard in the existing extension/webview, with typed host messages; no provider keys in the webview. Keep runtime/source overlays coherent.

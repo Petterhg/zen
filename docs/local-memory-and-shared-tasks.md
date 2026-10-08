@@ -1,8 +1,23 @@
-# Local memory, specialists and shared tasks
+# Personal memory and deferred collaboration ideas
 
 Design update, 8 October 2026. This is the proposed production architecture. The browser workbench demonstrates the controls only: no Hindsight process, model calls, remote editing, cloud watcher or deployment operation is started.
 
-## Product decisions
+## Current scope supersedes the earlier rollout
+
+The active product is individual voice pair programming, personal memory and UI refinement. Hindsight remains the candidate implementation, not a running integration. Specialist agents, collaboration and delivery sections below preserve earlier research only; they are deferred and must not dictate the first memory implementation.
+
+Memory should contain four distinct kinds of useful context:
+
+| Kind                         | Examples                                                                                     | How to use it                                                                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Personal preferences         | Coding style, favored approaches, pace and explanation detail                                | Prefer explicit statements and corrections; apply as defaults, subordinate to current instructions.                              |
+| Repository/service knowledge | Structure, ownership of responsibilities, entrypoints, dependencies, architectural decisions | Scope to the repository/service, cite supporting files and recheck after relevant code/branch changes.                           |
+| Learning context             | Topics the user says they know, explanations that helped, concepts they want to practice     | Keep topic-specific, editable and tentative when inferred; do not infer a fixed ability from questions, silence or typing speed. |
+| Session continuity           | Decisions, accepted versus verified edits, unresolved questions, next step                   | Resume individual work without a ticket/project board or automatic microphone start.                                             |
+
+Record whether a memory was explicitly stated, inferred or verified from code, plus its source, scope and time. A single accepted suggestion is not a global coding preference. Prefer a repo-specific convention within that repo; resolve conflicting or uncertain recollections using current evidence or a short clarification when needed. Retain useful summaries rather than every utterance. Recall only what helps the current interaction, and avoid repeatedly announcing remembered facts.
+
+## Earlier product decisions (collaboration and specialists deferred)
 
 - Light and dark appearances remain local preferences. Memory has no workboard tab.
 - Memory is automatic background behavior for the computer's current OS user, scoped to their repositories, services and tasks. It is not a shared team memory store.
@@ -100,12 +115,11 @@ The single assistant coordinator runs on the host, receives both identified voic
 
 A task-level lease/fencing token prevents two host windows from running the same assistant or executing duplicated tools. Subagents inherit that host authority with narrower scopes. If the host leaves or its lease expires, pause the assistant and shared writes, retain local pending drafts and show reconnect state. Do not automatically start the guest's assistant. Future explicit ownership transfer would stop the old owner, reconcile state and grant a new lease; it is outside the first collaboration version.
 
-## Implementation order and proof
+## Current implementation order and proof
 
-1. Native light/dark shell and workboard, without the Memory tab; keep existing Monaco, xterm and language tooling.
-2. Host-owned coordinator and typed specialist runner. Ship on-demand read-only review first. Prove a guest request cannot bypass tool permissions and new edits invalidate a review.
-3. Local memory pilot with a supervised pinned daemon. Prove correction/forget, isolation across users/repos, crash recovery and responsiveness during retention. Audit actual destinations before claiming fully local inference.
-4. Two-client shared task: concurrent text edits, filesystem operations, reconnect, versioned AI edits, speaker identity and host-loss behavior. Single-browser simulation is not acceptance evidence.
-5. Delivery and SRE adapters with recorded fixtures first, then authorized real status/log reads, then revision-bound writes. Prove stop/restart, provider gaps, incident deduplication and no duplicate merge or deployment operation.
+1. Improve the existing voice/coaching loop and native UI using real individual pairing sessions; establish latency and interruption baselines.
+2. Build the local personal-memory adapter and asynchronous retention/recall pipeline. Start with explicit preferences/corrections and source-backed repo/service findings. Prove correction/forget, isolation, freshness checks, crash recovery and responsiveness during retention. Audit actual processing destinations before claiming fully local inference.
+3. Add individual session checkpoints and progressive, tentative learning context. Prove useful recall after restart with current buffers and without a ticket or automatic microphone start.
+4. Refine recall quality and UI from observed use before expanding scope.
 
-The updated browser preview has Task and Delivery tabs plus a compact Specialists entry. It demonstrates editable specialist rules, fixture review/watch results, guest editing with disabled host controls and peer edits invalidating stale proposals. It deliberately does not claim to enforce network permissions or perform real collaboration.
+The browser preview retains Task/Delivery tabs, specialist examples and a simulated pairing room as earlier design exploration. These are not current implementation milestones. Collaboration, specialist execution and delivery/SRE adapters require a later explicit reprioritization.

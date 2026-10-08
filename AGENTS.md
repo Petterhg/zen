@@ -2,6 +2,12 @@
 
 Zen is a voice-first pair programming editor, currently branded Pair Code internally. Optimize for a human actively coding. Read README.md and the relevant source before changing behavior; docs/live-behavior.md records the interaction contract. Existing user instructions determine task scope.
 
+## Current product focus
+
+Prioritize individual human–AI voice pairing, automatic personal memory and calm editor UI. Memory should preserve explicit preferences, coding conventions, source-backed repository/service knowledge and tentative topic-specific familiarity so explanations suit the user. Keep memory local to the computer owner, automatic and out of the main workboard; current instructions and code take precedence over recollections.
+
+Collaboration with colleagues, project/issue boards, delivery pipelines and dedicated Reviewer/Delivery/SRE agents are deferred. Earlier design prototypes retain these ideas, but they are not current requirements or dependencies. A resumable individual pairing session must not require a ticket or team workflow. Improve the core before expanding scope; only an explicit user reprioritization brings deferred features back.
+
 ## Product invariants
 
 - The editor is the main work surface. Proposals belong inline, not as code dumps in chat. Transcripts are optional local diagnostics.

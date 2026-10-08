@@ -2,7 +2,9 @@
 
 Zen is the open-source home of the Pair Code prototype. The app and configuration IDs still use Pair Code to preserve compatibility.
 
-A local Code-OSS foundation for a human and an AI to work together continuously: files on the left, code and tabs in the middle, terminal below, and a quiet pairing companion on the right.
+A local Code-OSS foundation for one human and an AI to work together continuously: files on the left, code and tabs in the middle, terminal below, and a quiet pairing companion on the right.
+
+**Current focus: great voice pairing, personal memory and a calm editor UI.** Help the user think, understand and write code. Team collaboration, issue boards and delivery automation are deferred; they are not prerequisites for the core product.
 
 GPT-Live 1 (`gpt-live-1`) handles the full-duplex voice conversation. Client delegation connects it to Groq or Cerebras for code reasoning. The default backend is `qwen/qwen3.8-27b` on Groq, with `qwen-3.8-27b` on Cerebras. Both are configurable. Backend reasoning defaults to `auto` through OpenAI Decisions, with a safe fallback; project exploration uses at least `medium` and inline completion uses `none`.
 
@@ -56,50 +58,53 @@ These features are implemented in the prototype; this is not a production-readin
 | Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance.                                        |
 | External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                       |
 | Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap. |
-| Collaboration       | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                       |
+| Development setup   | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                       |
 
 ## Roadmap
 
 Ordered by current priority, not promised release dates. Completed work moves into Features after it is merged; open PRs remain identified here. Update this section in the same change when user-visible capability or priority changes.
 
-### Next milestone: explain → edit → verify
+### Core: voice and pair programming
 
-**Goal:** Select a function, ask for an explanation, make a guided change, and have the assistant notice and help verify it. The human stays in control of how much code the assistant writes.
+**Goal:** One human and one assistant, working on the code together. The assistant follows what the human is doing, explains at the right level and helps as much or as little as requested.
 
-- [ ] **Repair Python environment discovery.** Bundle a working `pet` helper for the supported platform and verify it during setup. Selecting an existing interpreter must not mask broken environment discovery.
-- [ ] **Evaluate retrieval on real coding questions.** Measure relevant results, missed evidence, lookup latency and backend rounds for service explanations and impact questions. Keep private evaluation content out of public fixtures.
-- [ ] **Make coaching respond to human edits.** Recognize a completed step, use current buffers and diagnostics, and continue without stale instructions, repeated acknowledgments or interrupted speech.
-- [ ] **Strengthen impact analysis.** Combine semantic matches with definitions, references, imports and relevant tests; distinguish verified dependencies from inference and incomplete coverage.
-- [ ] **Close the validation loop.** After human edits or accepted proposals, inspect diagnostics and support explicitly authorized formatter/test execution with concise, truthful results.
+- [ ] Improve conversational latency, natural interruptions and reliable voice/backend handoffs. Keep typing, navigation and assistance changes from interrupting speech; avoid repetitive acknowledgments and progress chatter.
+- [ ] Recognize completed human edits from current buffers and diagnostics, and continue without stale instructions.
+- [ ] Evaluate scoped retrieval and impact analysis on real coding questions: definitions, references, imports and tests alongside semantic matches. Measure missed evidence and latency, and report incomplete coverage honestly.
+- [ ] Repair Python environment discovery and keep formatting, linting and inline proposals dependable.
+- [ ] Close the local validation loop after edits with diagnostics and explicitly authorized formatter/test execution.
 
-Milestone acceptance: demonstrate this interaction on an existing service at voice-only and assisted-edit settings; preserve the requested target through tab changes, reject stale edits, keep typing/slider updates from interrupting speech, and report what was actually verified. Record offline checks separately from real provider and human voice validation.
+Acceptance: explain → edit → verify on an existing service at voice-only and assisted-edit settings, with correct captured targets, stale-edit rejection and no unwanted interruptions. Separate offline checks from real provider and human voice validation.
 
-### Task workspace and collaboration
+### Core: automatic personal memory
 
-- [ ] Extend the native themed workboard with task switching and the delivery timeline from the [design study](docs/zen-workbench.md). Native themes, reduced chrome, folding and persistent voice controls are implemented; task/agent/collaboration examples remain browser simulations.
-- [ ] Persist task-linked session checkpoints, decisions and checkout context; resume after restart without automatically starting the microphone.
-- [ ] Connect Linear issues to GitHub PR/review/CI evidence and AWS/GCP deployment/integration results, tied to the exact revision and explicit action permissions.
-- [ ] Add shared editable task workspaces: both people edit code/files, while the inviter owns the single assistant and its controls. Keep independent navigation, optional following and explicit host-loss behavior.
-- [ ] Add Zen-owned Reviewer, Delivery and SRE specialists with configurable rules and enforced tool profiles. Review runs on command; delivery tracks approved merges/deployments; SRE monitors scoped cloud/Sentry evidence in the background. See [the detailed design](docs/local-memory-and-shared-tasks.md).
+- [ ] Pilot Hindsight behind a supervised local adapter for the computer owner. No memory service is implemented or enabled yet; no Memory tab or shared memory bank is needed.
+- [ ] Remember explicit preferences and corrections: coding style, conventions, favored approaches, desired assistance and explanation detail. Distinguish personal defaults from repository/service-specific rules.
+- [ ] Maintain repository/service knowledge: structure, responsibilities, entrypoints, dependencies and architectural decisions, with source references and revision-aware freshness checks. Current code wins over stale recollections.
+- [ ] Adapt to what the user says they know or want explained. Treat inferred familiarity as tentative and topic-specific; asking a question does not establish a permanent skill level.
+- [ ] Resume individual pairing sessions with a compact checkpoint of decisions, verified work, open questions and the next step. No issue tracker or project board dependency; never automatically restart the microphone.
+- [ ] Provide inspect/correct/forget/disable controls in private Settings/commands. Retention and consolidation run off the voice path; pairing remains useful while memory is unavailable.
 
-### Proposed: automatic local memory
+Acceptance: relevant recall after restarting; explicit corrections supersede earlier assumptions; repository boundaries and code freshness are respected; deleted evidence is not immediately relearned; memory improves explanations without slowing or cluttering the conversation. Measure quality, latency, resource use and cost. Local storage does not imply local inference: verify and disclose processing destinations when implementing the adapter. See [the memory design](docs/local-memory-and-shared-tasks.md).
 
-- [ ] Pilot [Hindsight](https://github.com/vectorize-io/hindsight) behind a supervised local adapter. Memory runs automatically for the computer owner, with repository/service/task scope; no Memory tab and no shared team memory bank. No memory service is implemented or enabled yet.
+### Core: calm, editor-first UI
 
-Retain useful outcomes and corrections asynchronously, recall scoped evidence beside current code retrieval, and keep reflection off the speech path. Store provenance and distinguish proposed, accepted and verified results. Private Settings provides inspect/correct/forget/disable controls. Personal memory and provider credentials never enter a shared task room automatically.
+- [ ] Refine the native light/dark themes, typography, terminal and inline edits through actual pairing sessions.
+- [ ] Keep the file tree, editor, terminal and folding workboard focused on the current work. Research and occasional settings belong beside the code; transcripts stay optional diagnostics.
+- [ ] Add unobtrusive session resume and useful connection/error states, without requiring a dashboard or task-management workflow.
 
-Hindsight's local daemon uses its own PostgreSQL-backed storage, separate from Turso. Local inference is a separate model configuration choice. See [research, lifecycle and packaging considerations](docs/local-memory-and-shared-tasks.md) before implementation.
+Native themes, reduced chrome, folding and persistent voice controls are implemented. The broader [browser design study](docs/zen-workbench.md) contains earlier exploratory features; it is not the current feature specification.
 
-Acceptance: automatic relevant recall after restart; correction/deletion and stale-source handling; owner/repository isolation; no private-memory leakage into shared sessions; usable pairing while memory is unavailable. Measure latency, quality, resource use and model cost.
+### Later: retained ideas, outside the current scope
 
-### Later
+- [ ] Collaboration with colleagues and shared editable workspaces.
+- [ ] Linear/project boards and the GitHub PR → review → merge → CI/CD → cloud verification workflow.
+- [ ] Dedicated Reviewer, Delivery and SRE agents and long-running cloud/Sentry monitoring.
+- [ ] MCP and additional third-party integrations.
+- [ ] Parallel exploration and retrieval scaling where measurements justify them.
+- [ ] Remote development, broader platform support and signed releases/updates.
 
-- [ ] Extend the memory pilot to maintained project summaries with source/version tracking and invalidation.
-- [ ] MCP and third-party tool integrations with clear permissions.
-- [ ] Parallel exploration for broad, independent research where measurements justify the added complexity.
-- [ ] Retrieval scaling and additional language-aware chunking based on evaluation results.
-- [ ] Better concurrent-edit reconciliation and broader workspace/remote-development support.
-- [ ] Additional desktop platforms and a signed release/update pipeline.
+These ideas remain documented for future consideration. Do not build them as dependencies of voice, personal memory or UI work unless explicitly reprioritized.
 
 This is a local development foundation using the pinned Code-OSS native inline-edit renderer and proposed API. It is not yet a signed production editor. The sidebar shows voice controls, settings, and sources from web research; conversation transcripts and backend summaries stay in the local session trace, available through **Open session trace**. Durable project knowledge, service dependency catalogs, command/test execution, remote development, MCP integrations, and concurrent-edit rebasing are future work. Language-service references provide local impact evidence; they do not establish complete cross-service coverage.
 
