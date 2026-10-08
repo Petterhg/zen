@@ -241,9 +241,9 @@ export class SharedIndexClient {
     clearTimeout(this.reconnect);
     return result.roots;
   }
-  async refresh(checkout: string, file?: string, full = false) {
+  async refresh(checkout: string, file?: string, full = false, flush = false) {
     await this.ensure();
-    await this.requestRaw("refresh", { checkout, file, full });
+    await this.requestRaw("refresh", { checkout, file, full, flush });
   }
   async search(
     checkout: string,

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -132,6 +133,7 @@ export function workspaceTools(
           path: label(d.uri.fsPath),
           version: d.version,
           unsaved: d.isDirty,
+          hash: createHash("sha256").update(d.getText()).digest("hex"),
           lines: Array.from(
             { length: Math.max(0, end - start) },
             (_, i) => `${start + i + 1}: ${d.lineAt(start + i).text}`,

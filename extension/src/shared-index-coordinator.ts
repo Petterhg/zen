@@ -13,6 +13,20 @@ export const indexEligible = (file: string) =>
   !/(?:^|\/)(?:package-lock\.json|yarn\.lock|poetry\.lock)|\.min\.[jt]s$|\.d\.ts$/.test(
     file,
   );
+export const EMBEDDING_QUIET_MS = 30 * 60 * 1000;
+export const EMBEDDING_MAX_AGE_MS = 60 * 60 * 1000;
+export const embeddingDueAt = (p: {
+  firstChanged: number;
+  lastChanged: number;
+}) =>
+  Math.min(
+    p.lastChanged + EMBEDDING_QUIET_MS,
+    p.firstChanged + EMBEDDING_MAX_AGE_MS,
+  );
+const earliestEmbedding = (
+  pending: { firstChanged: number; lastChanged: number }[],
+) =>
+  pending.reduce((due, item) => Math.min(due, embeddingDueAt(item)), Infinity);
 interface Entry {
   root: SharedRoot;
   clients: Map<string, string>;
@@ -21,6 +35,9 @@ interface Entry {
   rg: string;
   pending: Set<string>;
   full: boolean;
+  flush: boolean;
+  retryAt?: number;
+  embeddingTimer?: ReturnType<typeof setTimeout>;
   job?: Promise<void>;
   controller?: AbortController;
   timer?: ReturnType<typeof setTimeout>;
@@ -97,6 +114,7 @@ export class SharedIndexCoordinator {
           rg,
           pending: new Set(),
           full: true,
+          flush: totals.files === 0,
           status: {
             checkout: root.checkout,
             repository: root.name,
@@ -124,6 +142,7 @@ export class SharedIndexCoordinator {
       if (!entry) continue;
       entry.clients.delete(client);
       if (!entry.clients.size) {
+        clearTimeout(entry.embeddingTimer);
         clearTimeout(entry.timer);
         entry.timer = undefined;
         entry.controller?.abort();
@@ -153,15 +172,28 @@ export class SharedIndexCoordinator {
       })),
     );
   }
-  refresh(client: string, checkout: string, file?: string, full = false) {
+  refresh(
+    client: string,
+    checkout: string,
+    file?: string,
+    full = false,
+    flush = false,
+  ) {
     const entry = this.entry(client, checkout);
     if (file) {
       if (path.isAbsolute(file) || file.split(/[\\/]/).includes(".."))
         throw new Error("Invalid changed path.");
       entry.pending.add(file);
     }
+    entry.flush ||= flush;
+    if (flush) entry.retryAt = 0;
     // Policy/branch changes invalidate in-flight vectors immediately.
-    if (full) entry.controller?.abort();
+    if (full || (file && entry.status.state === "embedding")) {
+      // Avoid repeated billed requests when a file keeps changing during an overdue job.
+      if (entry.controller && entry.status.state === "embedding" && !flush)
+        entry.retryAt = Date.now() + 60000;
+      entry.controller?.abort();
+    }
     this.schedule(entry, full);
   }
   async search(
@@ -220,10 +252,19 @@ export class SharedIndexCoordinator {
     const controller = new AbortController();
     entry.controller = controller;
     entry.job = this.run(entry, controller.signal)
-      .catch((e) => {
+      .catch(async (e) => {
         if (!controller.signal.aborted) {
           entry.full = false;
-          entry.pending.clear();
+          // Durable embedding work remains queued after provider failures.
+          entry.retryAt = Date.now() + 60000;
+          const queued = await this.index.pending(entry.root.checkout);
+          entry.status.pendingEmbeddings = queued.length;
+          entry.status.nextEmbeddingAt = queued.length
+            ? Math.max(
+                entry.retryAt,
+                entry.flush ? Date.now() : earliestEmbedding(queued),
+              )
+            : undefined;
           this.publish(
             entry,
             "error",
@@ -241,6 +282,8 @@ export class SharedIndexCoordinator {
           (entry.full || entry.pending.size)
         )
           this.schedule(entry, false);
+        else if (!this.closed && entry.clients.size)
+          void this.scheduleEmbeddings(entry).catch(() => {});
       });
   }
   private discovery(entry: Entry) {
@@ -271,7 +314,12 @@ export class SharedIndexCoordinator {
       ? undefined
       : text;
   }
-  private async update(entry: Entry, file: string, signal: AbortSignal) {
+  private async update(
+    entry: Entry,
+    file: string,
+    signal: AbortSignal,
+    defer = true,
+  ) {
     signal.throwIfAborted();
     entry.status.currentFile = file;
     this.publish(entry, entry.status.state);
@@ -307,6 +355,7 @@ export class SharedIndexCoordinator {
         }
       },
       this.embedding(entry.root.checkout),
+      defer,
     );
     entry.status.embedded += result.embedded;
     entry.status.reused += result.reused;
@@ -314,6 +363,7 @@ export class SharedIndexCoordinator {
   }
   private async run(entry: Entry, signal: AbortSignal) {
     const full = entry.full;
+    const flush = entry.flush;
     entry.full = false;
     entry.status = {
       ...entry.status,
@@ -357,6 +407,37 @@ export class SharedIndexCoordinator {
       entry.pending.delete(file);
       await this.update(entry, file, signal);
     }
+    const queued = await this.index.pending(entry.root.checkout);
+    Object.assign(entry.status, await this.index.stats(entry.root.checkout), {
+      pendingEmbeddings: queued.length,
+      nextEmbeddingAt: queued.length
+        ? Math.max(
+            entry.retryAt ?? 0,
+            entry.flush ? Date.now() : earliestEmbedding(queued),
+          )
+        : undefined,
+    });
+    // First build makes all sources lexical before spending time on embeddings.
+    // Subsequent saved edits remain lexical until quiet, max-age, or manual flush.
+    for (const pending of await this.index.pending(entry.root.checkout)) {
+      signal.throwIfAborted();
+      if (
+        (flush || embeddingDueAt(pending) <= Date.now()) &&
+        (entry.retryAt ?? 0) <= Date.now()
+      ) {
+        this.publish(entry, "embedding");
+        await this.update(entry, pending.path, signal, false);
+      }
+    }
+    const remaining = await this.index.pending(entry.root.checkout);
+    if (!remaining.length) entry.flush = false;
+    entry.status.pendingEmbeddings = remaining.length;
+    entry.status.nextEmbeddingAt = remaining.length
+      ? Math.max(
+          entry.retryAt ?? 0,
+          entry.flush ? Date.now() : earliestEmbedding(remaining),
+        )
+      : undefined;
     signal.throwIfAborted();
     Object.assign(entry.status, await this.index.stats(entry.root.checkout), {
       coverageKnown: true,
@@ -364,11 +445,29 @@ export class SharedIndexCoordinator {
     });
     this.publish(entry, "ready");
   }
+  private async scheduleEmbeddings(entry: Entry) {
+    clearTimeout(entry.embeddingTimer);
+    const pending = await this.index.pending(entry.root.checkout);
+    if (this.closed || !entry.clients.size || !pending.length) return;
+    const due = Math.max(
+      entry.retryAt ?? 0,
+      entry.flush ? Date.now() : earliestEmbedding(pending),
+    );
+    // Back off after failures instead of spinning on an overdue durable job.
+    entry.embeddingTimer = setTimeout(
+      () => {
+        entry.embeddingTimer = undefined;
+        this.start(entry);
+      },
+      Math.max(entry.status.state === "error" ? 60000 : 250, due - Date.now()),
+    );
+  }
   // Embedding credentials are connection-scoped and never persisted by the service.
   async close() {
     this.closed = true;
     for (const e of this.roots.values()) {
       clearTimeout(e.timer);
+      clearTimeout(e.embeddingTimer);
       e.controller?.abort();
     }
     await Promise.all([...this.roots.values()].map((e) => e.job));

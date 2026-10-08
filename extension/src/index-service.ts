@@ -29,6 +29,8 @@ export interface IndexStatus {
   embedded: number;
   reused: number;
   error?: string;
+  pendingEmbeddings?: number;
+  nextEmbeddingAt?: number;
   processed?: number;
   total?: number;
   repository?: string;
@@ -42,6 +44,7 @@ export class IndexService implements vscode.Disposable {
   private roots = new Map<string, RootIndex>();
   private pending = new Set<string>();
   private full = true;
+  private flush = false;
   private timer?: ReturnType<typeof setTimeout>;
   private job?: Promise<void>;
   private lifetime = new AbortController();
@@ -120,7 +123,9 @@ export class IndexService implements vscode.Disposable {
     if (!allowed.length) return;
     const active =
       allowed.find((r) =>
-        ["scanning", "indexing", "updating", "starting"].includes(r.state),
+        ["scanning", "indexing", "embedding", "updating", "starting"].includes(
+          r.state,
+        ),
       ) ??
       allowed.find((r) => r.state === "error") ??
       allowed[0];
@@ -132,6 +137,13 @@ export class IndexService implements vscode.Disposable {
       coverageKnown: allowed.every((r) => r.coverageKnown),
       embedded: allowed.reduce((n, r) => n + r.embedded, 0),
       reused: allowed.reduce((n, r) => n + r.reused, 0),
+      pendingEmbeddings: allowed.reduce(
+        (n, r) => n + (r.pendingEmbeddings ?? 0),
+        0,
+      ),
+      nextEmbeddingAt: Math.min(
+        ...allowed.map((r) => r.nextEmbeddingAt ?? Infinity),
+      ),
       processed: active.processed,
       total: active.total,
       repository: active.repository,
@@ -162,7 +174,8 @@ export class IndexService implements vscode.Disposable {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.start(), 300);
   }
-  refresh() {
+  refresh(flush = false) {
+    this.flush ||= flush;
     this.lifetime.abort();
     this.lifetime = new AbortController();
     this.queryCache.clear();
@@ -240,6 +253,11 @@ export class IndexService implements vscode.Disposable {
           path.relative(entry.root.path, file).split(path.sep).join("/"),
           policyFile(file),
         );
+    }
+    if (this.flush) {
+      for (const entry of this.roots.values())
+        await this.client.refresh(entry.checkout, undefined, true, true);
+      this.flush = false;
     }
     const result = await this.client.status();
     this.guard();
@@ -407,9 +425,18 @@ export class IndexService implements vscode.Disposable {
       };
     let vector = this.queryCache.get(query);
     if (!vector) {
-      [vector] = await this.embed([query], s);
+      try {
+        [vector] = await this.embed(
+          [query],
+          AbortSignal.any([s, AbortSignal.timeout(2000)]),
+        );
+      } catch {
+        s.throwIfAborted();
+        // Saved lexical chunks and window-local buffers remain usable offline.
+        vector = [];
+      }
       this.guard();
-      this.queryCache.set(query, vector);
+      if (vector.length) this.queryCache.set(query, vector);
       if (this.queryCache.size > 100)
         this.queryCache.delete(this.queryCache.keys().next().value!);
     }
@@ -531,8 +558,9 @@ export class IndexService implements vscode.Disposable {
       matches: [...unique.values()].slice(0, limit),
       status: this.status.state,
       skippedStale: skipped,
+      retrievalMode: vector.length ? "hybrid" : "lexical",
       coverage:
-        "Ranked excerpts of currently indexed sources, not an exhaustive dependency graph. Dirty buffers override stale disk results; snippets may be truncated. Use parentStart/parentEnd with read_file to expand, and symbol_usages/search_text for callers.",
+        "Ranked excerpts, not an exhaustive dependency graph. Pending saved changes use fresh lexical chunks while embeddings wait. Dirty buffers override stale disk results; snippets may be truncated. Use parentStart/parentEnd with read_file to expand, and symbol_usages/search_text for callers.",
     };
   }
   async dispose(): Promise<void> {

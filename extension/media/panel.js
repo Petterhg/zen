@@ -611,6 +611,7 @@
         "scanning",
         "indexing",
         "updating",
+        "embedding",
       ].includes(data.state);
       const label = {
         starting: "Shared code index starting…",
@@ -618,10 +619,16 @@
         scanning: "Scanning repository…",
         indexing: `Indexing · ${data.processed ?? 0} / ${data.total ?? "?"} files checked`,
         updating: "Updating changed files…",
-        ready: `Code index ready · ${data.files} files`,
+        embedding: "Updating semantic search…",
+        ready: data.pendingEmbeddings
+          ? `Search ready · ${data.pendingEmbeddings} files awaiting embeddings`
+          : `Code index ready · ${data.files} files`,
         paused: "Code index paused",
         untrusted: "Code index waiting for workspace trust",
-        error: "Code index needs attention",
+        error:
+          data.files > 0 && data.pendingEmbeddings > 0
+            ? "Text search ready · embeddings need attention"
+            : "Code index needs attention",
       };
       $("indexStatus").textContent =
         label[data.state] || `Code index ${data.state}`;
@@ -641,6 +648,11 @@
               : [
                   data.shared && "Shared on this computer",
                   data.repository,
+                  data.pendingEmbeddings > 0 &&
+                    "Changed files searchable by text now; embeddings after 30 min quiet (60 min maximum)",
+                  data.pendingEmbeddings > 0 &&
+                    Number.isFinite(data.nextEmbeddingAt) &&
+                    `Next embeddings ${new Date(data.nextEmbeddingAt).toLocaleTimeString()}`,
                   data.migrationDeferred &&
                     "Old index cleanup will finish after older Zen windows close",
                   active && data.currentFile,

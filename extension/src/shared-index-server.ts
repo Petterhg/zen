@@ -113,7 +113,9 @@ export async function startSharedIndexServer(
             !timingSafeEqual(supplied, Buffer.from(token)) ||
             data.protocol !== SHARED_PROTOCOL
           )
-            throw new Error("Shared index authentication/version mismatch.");
+            throw new Error(
+              "Shared index authentication/version mismatch. Quit all Zen windows and allow the old index service to exit (up to 60 seconds), then reopen.",
+            );
           client.authenticated = true;
           socket.setTimeout(0);
           return { protocol: SHARED_PROTOCOL, pid: process.pid };
@@ -149,6 +151,7 @@ export async function startSharedIndexServer(
               String(params.checkout),
               typeof params.file === "string" ? params.file : undefined,
               params.full === true,
+              params.flush === true,
             );
             return {};
           case "search": {

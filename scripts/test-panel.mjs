@@ -187,6 +187,48 @@ try {
     /8 files · 24 chunks stored/,
   );
 
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "ready",
+      files: 8,
+      chunks: 24,
+      coverageKnown: true,
+      pendingEmbeddings: 3,
+      nextEmbeddingAt: Date.now() + 30 * 60000,
+    }),
+  );
+  assert.match(
+    await page.locator("#indexStatus").textContent(),
+    /Search ready.*3 files awaiting embeddings/,
+  );
+  assert.match(
+    await page.locator("#indexDetail").textContent(),
+    /searchable by text now/,
+  );
+  assert.equal(await page.locator("#indexProgress").isVisible(), false);
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "error",
+      files: 8,
+      pendingEmbeddings: 3,
+      error: "Synthetic embedding outage",
+    }),
+  );
+  assert.match(
+    await page.locator("#indexStatus").textContent(),
+    /Text search ready/,
+  );
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "ready",
+      files: 8,
+      pendingEmbeddings: 0,
+    }),
+  );
+
   assert.equal(
     await page.locator("#assistanceLevel").getAttribute("step"),
     "1",

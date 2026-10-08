@@ -18,7 +18,9 @@ import {
 } from "./assistance.js";
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { WorkspaceDiscovery } from "./discovery.js";
+import { digest } from "./code-chunks.js";
 import {
   createLiveSession,
   requestBackend,
@@ -92,7 +94,42 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private lastEditEvent?: { status: string; file?: string };
   private recentFiles: string[] = [];
   private research: ResearchArticle[] = [];
-  private researchBriefs = new ResearchBriefs();
+  private researchBriefs: ResearchBriefs;
+  private researchWorkspaceSignature(): string {
+    return JSON.stringify(
+      (vscode.workspace.workspaceFolders ?? [])
+        .filter((f) => f.uri.scheme === "file")
+        .map((f) => f.uri.fsPath)
+        .sort(),
+    );
+  }
+  private async verifyResearchSource(
+    file: string,
+    signal: AbortSignal,
+  ): Promise<string> {
+    if (
+      !vscode.workspace.isTrusted ||
+      !this.configuration().get("shareEditorContext", true)
+    )
+      throw new Error("Workspace context sharing is disabled.");
+    const roots = (vscode.workspace.workspaceFolders ?? [])
+      .filter((f) => f.uri.scheme === "file")
+      .map((f) => ({ name: f.name, path: f.uri.fsPath }));
+    const discovery = new WorkspaceDiscovery(roots, "rg");
+    const resolved = await discovery.resolve(file, signal);
+    if ((await stat(resolved)).size > 2_000_000)
+      throw new Error("Source is too large for a retained brief.");
+    const source = await readFile(resolved, "utf8");
+    signal.throwIfAborted();
+    // Recheck policy after reading in case an ignore rule changed during the read.
+    await new WorkspaceDiscovery(roots, "rg").resolve(file, signal);
+    if (
+      !vscode.workspace.isTrusted ||
+      !this.configuration().get("shareEditorContext", true)
+    )
+      throw new Error("Workspace context sharing is disabled.");
+    return digest(source);
+  }
   private codeIndex: IndexService;
   private memory: PersonalMemory;
   private resumedCheckpoint?: { scope: string; id: string };
@@ -214,6 +251,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    this.researchBriefs = new ResearchBriefs(context.globalState);
+    if (!this.configuration().get("shareEditorContext", true))
+      this.researchBriefs.clear();
     const output = vscode.window.createOutputChannel("Pair Code Diagnostics");
     this.disposables.push(output, this.pointing);
     this.trace = new TraceJournal(
@@ -242,6 +282,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       (status) => this.post({ type: "indexStatus", ...status }),
     );
     this.disposables.push(this.codeIndex);
+    const briefWatcher = vscode.workspace.createFileSystemWatcher("**/*");
+    const changedBriefSource = (uri: vscode.Uri) => {
+      if (uri.scheme !== "file") return;
+      if (/(?:^|[\\/])(?:\.pairignore|\.gitignore|\.ignore)$/.test(uri.fsPath))
+        this.researchBriefs.clear();
+      else this.researchBriefs.invalidate(uri.fsPath);
+    };
+    this.disposables.push(
+      briefWatcher,
+      briefWatcher.onDidCreate(changedBriefSource),
+      briefWatcher.onDidChange(changedBriefSource),
+      briefWatcher.onDidDelete(changedBriefSource),
+    );
     this.editor = vscode.window.activeTextEditor;
     this.updateVoiceStatus("disconnected");
     this.status.command = "pairCode.open";
@@ -422,7 +475,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           )
         )
           this.researchBriefs.clear();
-        else this.researchBriefs.invalidate();
+        else if (event.document.uri.scheme === "file")
+          this.researchBriefs.invalidate(event.document.uri.fsPath);
         if (this.codeRefs.some((r) => r.uri === event.document.uri.toString()))
           this.clearPointing();
         if (this.proposal?.uri === event.document.uri.toString()) {
@@ -563,7 +617,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     void this.view?.webview.postMessage(message);
   }
   refreshIndex(): void {
-    this.codeIndex.refresh();
+    this.codeIndex.refresh(true);
   }
   async showTrace(): Promise<void> {
     this.trace.record({ type: "trace.opened" });
@@ -1140,7 +1194,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           sessionToken: this.sessionToken,
         });
         if (event.type === "session.started") {
-          this.researchBriefs.clear();
+          this.researchBriefs.beginSession();
           this.targets.reset();
           this.sharedReferenceContent = "";
           this.publishAssistance();
@@ -1274,23 +1328,57 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
                 this.trace.record({ ...event, taskRevision: revision }),
             })
           : (configuredEffort as Effort);
+      const researchWorkspace = this.researchWorkspaceSignature();
+      const verifyResearch = (file: string, signal: AbortSignal) =>
+        this.verifyResearchSource(file, signal);
+      const researchReference = await this.researchBriefs.verifiedSnapshot(
+        latestHuman,
+        context?.file ?? "",
+        researchWorkspace,
+        verifyResearch,
+        controller.signal,
+      );
+      controller.signal.throwIfAborted();
       const readTools = [
         ...workspaceTools(
           () => this.configuration().get("shareEditorContext", true),
           await this.key("firecrawl"),
         ),
         ...this.codeIndex.tools(),
+        this.researchBriefs.tool(
+          () => this.researchWorkspaceSignature(),
+          () =>
+            this.configuration().get("shareEditorContext", true) &&
+            vscode.workspace.isTrusted,
+          verifyResearch,
+        ),
       ];
       const explorer = explorationTool({
-        researchReference: this.researchBriefs.snapshot(),
+        researchReference,
         onReport: (report, question, scope) => {
           if (
             !controller.signal.aborted &&
             revision === this.jobRevision &&
             token === this.sessionToken &&
-            this.configuration().get("shareEditorContext", true)
+            this.configuration().get("shareEditorContext", true) &&
+            researchWorkspace === this.researchWorkspaceSignature()
           )
-            this.researchBriefs.remember(question, scope, report);
+            void this.researchBriefs.rememberVerified(
+              question,
+              scope,
+              {
+                ...report,
+                containsUnsaved:
+                  report.containsUnsaved === true ||
+                  vscode.workspace.textDocuments.some(
+                    (document) =>
+                      document.uri.scheme === "file" && document.isDirty,
+                  ),
+              },
+              researchWorkspace,
+              verifyResearch,
+              controller.signal,
+            );
         },
         timeoutMs:
           this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
@@ -1337,7 +1425,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         taskState: {
           personalMemory: memoryReference,
           previousPairing: await this.resumeReference(memoryScope),
-          researchReference: this.researchBriefs.snapshot(),
+          researchReference,
           lastEditEvent: this.lastEditEvent,
           pendingPreview: this.proposal
             ? { file: this.proposal.uri, version: this.proposal.version }
@@ -1665,7 +1753,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     }
     this.cancel();
     this.history.entries = [];
-    this.researchBriefs.clear();
+    this.researchBriefs.beginSession();
     this.lastEditEvent = undefined;
     this.focus = new FocusTimeline();
     this.reject(false);
@@ -1686,7 +1774,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.sessionJob?.abort();
     this.sessionToken++;
     this.history.entries = [];
-    this.researchBriefs.clear();
+    this.researchBriefs.beginSession();
     this.lastEditEvent = undefined;
     this.focus = new FocusTimeline();
     this.reject(false);

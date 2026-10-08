@@ -90,6 +90,7 @@ export class CodeIndex {
       const { connect } = await import("@tursodatabase/database");
       db = await connect(path.join(directory, `shared2-${INDEX_VERSION}.db`));
       await db.exec(`CREATE TABLE IF NOT EXISTS files(checkout TEXT NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL, service TEXT NOT NULL, language TEXT NOT NULL, repository TEXT NOT NULL, PRIMARY KEY(checkout,path));
+        CREATE TABLE IF NOT EXISTS pending_embeddings(checkout TEXT NOT NULL, path TEXT NOT NULL, firstChanged INTEGER NOT NULL, lastChanged INTEGER NOT NULL, PRIMARY KEY(checkout,path));
         CREATE TABLE IF NOT EXISTS embeddings(hash TEXT PRIMARY KEY, vector BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS chunks(id TEXT PRIMARY KEY, checkout TEXT NOT NULL, repository TEXT NOT NULL, path TEXT NOT NULL, service TEXT NOT NULL, language TEXT NOT NULL, symbol TEXT NOT NULL, kind TEXT NOT NULL, startLine INTEGER NOT NULL, endLine INTEGER NOT NULL, parentStart INTEGER NOT NULL, parentEnd INTEGER NOT NULL, text TEXT NOT NULL, hash TEXT NOT NULL, embedding BLOB NOT NULL);
         CREATE INDEX IF NOT EXISTS chunk_scope ON chunks(checkout,service,path);
@@ -136,6 +137,17 @@ export class CodeIndex {
       ).map((r: { path: string }) => r.path),
     );
   }
+  /** Persistent saved-source queue. Reconciliation does not reset unchanged deadlines. */
+  async pending(
+    checkout: string,
+  ): Promise<{ path: string; firstChanged: number; lastChanged: number }[]> {
+    return this.serial(() =>
+      this.db.all(
+        "SELECT path,firstChanged,lastChanged FROM pending_embeddings WHERE checkout=?",
+        checkout,
+      ),
+    );
+  }
   async remove(file: string, checkout = ""): Promise<void> {
     await this.serial(async () => {
       await this.db.exec("BEGIN");
@@ -147,6 +159,11 @@ export class CodeIndex {
         );
         await this.db.run(
           "DELETE FROM files WHERE checkout=? AND path=?",
+          checkout,
+          file,
+        );
+        await this.db.run(
+          "DELETE FROM pending_embeddings WHERE checkout=? AND path=?",
           checkout,
           file,
         );
@@ -162,6 +179,8 @@ export class CodeIndex {
     signal: AbortSignal,
     current: () => Promise<boolean> = async () => true,
     embed: Embed = this.embed,
+    defer = false,
+    now = Date.now(),
   ): Promise<{ embedded: number; reused: number; stale?: boolean }> {
     signal.throwIfAborted();
     const checkout = file.checkout ?? "";
@@ -174,7 +193,15 @@ export class CodeIndex {
         file.path,
       ),
     );
+    const pending = await this.serial(() =>
+      this.db.get(
+        "SELECT path FROM pending_embeddings WHERE checkout=? AND path=?",
+        checkout,
+        file.path,
+      ),
+    );
     if (
+      (defer || !pending) &&
       old?.hash === hash &&
       old.service === file.service &&
       old.language === file.language &&
@@ -198,8 +225,9 @@ export class CodeIndex {
       }
     });
     const missing = [...new Set(hashes)].filter((h) => !vectors.has(h));
+    const staged = defer && missing.length > 0;
     let embedded = 0;
-    for (let i = 0; i < missing.length; i += 16) {
+    for (let i = 0; !defer && i < missing.length; i += 16) {
       signal.throwIfAborted();
       if (!(await current())) return { embedded, reused: 0, stale: true };
       const batch = missing.slice(i, i + 16);
@@ -231,7 +259,7 @@ export class CodeIndex {
           checkout,
           file.path,
         );
-        for (const h of missing)
+        for (const h of defer ? [] : missing)
           await this.db.run(
             "INSERT OR IGNORE INTO embeddings VALUES (?,vector32(?))",
             h,
@@ -255,7 +283,9 @@ export class CodeIndex {
             c.parentEnd,
             c.text,
             hash,
-            JSON.stringify(vectors.get(hashes[i])),
+            JSON.stringify(
+              vectors.get(hashes[i]) ?? Array(EMBEDDING_DIMENSIONS).fill(0),
+            ),
           );
         }
         await this.db.run(
@@ -267,13 +297,28 @@ export class CodeIndex {
           file.language,
           repository,
         );
+        if (staged) {
+          await this.db.run(
+            "INSERT INTO pending_embeddings VALUES (?,?,?,?) ON CONFLICT(checkout,path) DO UPDATE SET lastChanged=excluded.lastChanged",
+            checkout,
+            file.path,
+            now,
+            now,
+          );
+        } else {
+          await this.db.run(
+            "DELETE FROM pending_embeddings WHERE checkout=? AND path=?",
+            checkout,
+            file.path,
+          );
+        }
         signal.throwIfAborted();
         await this.db.exec("COMMIT");
       } catch (e) {
         await this.db.exec("ROLLBACK");
         throw e;
       }
-      return { embedded, reused: chunks.length - embedded };
+      return { embedded, reused: staged ? 0 : chunks.length - embedded };
     });
   }
   async search(
@@ -283,7 +328,7 @@ export class CodeIndex {
     limit = 30,
   ): Promise<IndexHit[]> {
     if (
-      vector.length !== EMBEDDING_DIMENSIONS ||
+      (vector.length !== 0 && vector.length !== EMBEDDING_DIMENSIONS) ||
       vector.some((n) => !Number.isFinite(n))
     )
       throw new Error("Query embedding does not match index.");
@@ -322,17 +367,20 @@ export class CodeIndex {
     const columns =
       "id,checkout,repository,path,service,language,symbol,kind,startLine,endLine,parentStart,parentEnd,text,hash";
     return this.serial(async () => {
-      const semantic = (await this.db.all(
-        `SELECT ${columns}, vector_distance_cos(embedding,vector32(?)) AS distance FROM chunks${where} ORDER BY distance LIMIT ?`,
-        JSON.stringify(vector),
-        ...args,
-        limit,
-      )) as IndexHit[];
+      const semantic = vector.length
+        ? ((await this.db.all(
+            `SELECT ${columns}, vector_distance_cos(embedding,vector32(?)) AS distance FROM chunks${where} AND NOT EXISTS (SELECT 1 FROM pending_embeddings p WHERE p.checkout=chunks.checkout AND p.path=chunks.path) ORDER BY distance LIMIT ?`,
+            JSON.stringify(vector),
+            ...args,
+            limit,
+          )) as IndexHit[])
+        : [];
       const lexical = terms.length
         ? ((await this.db.all(
-            `SELECT ${columns} FROM chunks${where}${where ? " AND " : " WHERE "} (${terms.map(() => "instr(lower(symbol || ' ' || path || ' ' || text),?)>0").join(" OR ")}) LIMIT 200`,
+            `SELECT ${columns} FROM chunks${where}${where ? " AND " : " WHERE "} (${terms.map(() => "instr(lower(symbol || ' ' || path || ' ' || text),?)>0").join(" OR ")}) ORDER BY (${terms.map(() => "(CASE WHEN instr(lower(symbol),?)>0 THEN 4 ELSE 0 END + CASE WHEN instr(lower(path),?)>0 THEN 2 ELSE 0 END + CASE WHEN instr(lower(text),?)>0 THEN 1 ELSE 0 END)").join(" + ")}) DESC, path, startLine LIMIT 200`,
             ...args,
             ...terms,
+            ...terms.flatMap((t) => [t, t, t]),
           )) as IndexHit[])
         : [];
       const rank = (h: IndexHit) =>

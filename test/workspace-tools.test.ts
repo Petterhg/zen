@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import type { BackendTool } from "../extension/src/backend.js";
 const requireNative = createRequire(import.meta.url);
@@ -103,6 +104,12 @@ test("workspace tools retain unsaved reads, scoped search and language-service e
   const read = await run("read_file", { path: "services/ner/src/main.py" });
   assert.equal(read.unsaved, true);
   assert.equal(read.version, 12);
+  assert.equal(
+    read.hash,
+    createHash("sha256")
+      .update("# UNSAVED needle\nfrom .extractor import extractor\n")
+      .digest("hex"),
+  );
   assert.match(String(read.lines), /UNSAVED needle/);
   assert.doesNotMatch(String(read.lines), /DISK VERSION/);
   const search = await run("search_text", {
@@ -128,9 +135,11 @@ test("workspace tools retain unsaved reads, scoped search and language-service e
     path: string;
     lines?: string;
     version?: number;
+    hash?: string;
     error?: string;
   }[];
   assert.equal(batchFiles[0].version, 12);
+  assert.equal(batchFiles[0].hash, read.hash);
   assert.match(batchFiles[0].lines!, /UNSAVED needle/);
   assert.match(batchFiles[2].error!, /excluded/);
   assert.doesNotMatch(JSON.stringify(batch), /PRIVATE_KEY/);

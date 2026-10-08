@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile, link, rm, lstat } from "node:fs/promises";
 import type { Socket } from "node:net";
 import type { DiscoveryRoot } from "./discovery.js";
-export const SHARED_PROTOCOL = 2;
+export const SHARED_PROTOCOL = 3;
 export const MAX_FRAME = 8 * 1024 * 1024;
 export const sharedIndexDirectory = () =>
   path.join(homedir(), ".zen", "code-index", "shared-v2");
@@ -28,6 +28,8 @@ export interface RootStatus {
   coverageKnown: boolean;
   embedded: number;
   reused: number;
+  pendingEmbeddings?: number;
+  nextEmbeddingAt?: number;
   processed?: number;
   total?: number;
   currentFile?: string;

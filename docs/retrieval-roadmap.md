@@ -1,6 +1,6 @@
 # Faster repository context for Pair Code
 
-This proposal follows the October 7 session on a private monorepo. Native search, batched reads, bounded session research briefs, and quiet slider updates are implemented in 0.1.3. Local hybrid indexing is implemented in 0.2.0; see the README for its current scope and limitations. Parallel research workers remain proposed. The design discussion below records the original proposal.
+This proposal follows the October 7 session on a private monorepo. Native search, batched reads, bounded session research briefs, and quiet slider updates are implemented in 0.1.3. Local hybrid indexing is implemented in 0.2.0; see the README for its current scope and limitations. Saved lexical deltas, durable 30-minute quiet / 60-minute age embedding queues and reusable local source-backed briefs are now implemented. Exploration separates routing from synthesis within one isolated researcher. Parallel research workers and automatic complete dependency graphs remain proposed. The design discussion below records the original proposal.
 
 ## What the trace shows
 

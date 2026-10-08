@@ -46,6 +46,7 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   }[] = [];
   let enabled = true,
     requests = 0;
+  let offline = false;
   const mock = {
     workspace: {
       isTrusted: true,
@@ -76,6 +77,7 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   const previous = globalThis.fetch;
   globalThis.fetch = (async (_url, init) => {
     requests++;
+    if (offline) throw new Error("Synthetic provider outage");
     await new Promise((r) => setTimeout(r, 80));
     const body = JSON.parse(String(init?.body));
     assert.doesNotMatch(JSON.stringify(body), /SECRET_MARKER/);
@@ -185,7 +187,7 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   );
   assert.ok(
     statuses.some(
-      (s) => s.state === "indexing" && s.processed === 1 && s.embedded > 0,
+      (s) => s.state === "ready" && s.processed === 1 && s.embedded > 0,
     ),
   );
   assert.equal(service.status.currentFile, undefined);
@@ -209,6 +211,14 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   const dirty = await search("revoke");
   assert.ok(dirty.matches.some((m) => m.unsaved && m.text.includes("revoke")));
   assert.ok(dirty.matches.every((m) => !m.text.includes("authorize")));
+  offline = true;
+  assert.ok(
+    (await search("revoke offline")).matches.some(
+      (m) => m.unsaved && m.text.includes("revoke"),
+    ),
+    "fresh lexical buffers must work without embeddings",
+  );
+  offline = false;
   await writeFile(path.join(root, ".pairignore"), "services/auth/\n");
   assert.equal((await search("revoke")).matches.length, 0);
   const before = requests;

@@ -18,6 +18,11 @@ import {
   sharedIndexPort,
   SHARED_PROTOCOL,
 } from "../extension/src/shared-index-protocol.js";
+import {
+  embeddingDueAt,
+  EMBEDDING_QUIET_MS,
+  EMBEDDING_MAX_AGE_MS,
+} from "../extension/src/shared-index-coordinator.js";
 import { retireLegacyIndexes } from "../extension/src/index-migration.js";
 const grammars = path.resolve(
   import.meta.dirname,
@@ -159,6 +164,31 @@ test("shared owner coalesces windows, isolates checkouts before ranking, revalid
   assert.ok(
     (await clients[0].search(a, "authorize", vector(0), {}, signal)).length,
   );
+  await writeFile(
+    path.join(a, "services/auth/main.py"),
+    "def authorize_alpha_changed():\n    return 42\n",
+  );
+  await clients[0].refresh(a, "services/auth/main.py");
+  await until(
+    async () =>
+      (await clients[0].status()).roots.find((r) => r.checkout === a)
+        ?.pendingEmbeddings === 1,
+    "saved change did not enter durable queue",
+  );
+  assert.equal(alphaEmbeddings, 1, "ordinary saves must wait before embedding");
+  assert.match(
+    (await clients[0].search(a, "authorize_alpha_changed", [], {}, signal))[0]
+      .text,
+    /42/,
+  );
+  await clients[0].refresh(a, undefined, true, true);
+  await until(async () => {
+    const status = (await clients[0].status()).roots.find(
+      (r) => r.checkout === a,
+    );
+    return status?.state === "ready" && status.pendingEmbeddings === 0;
+  }, "manual refresh did not flush embeddings");
+  assert.equal(alphaEmbeddings, 2);
   await writeFile(path.join(a, ".pairignore"), "services/auth/\n");
   assert.equal(
     (await clients[0].search(a, "authorize", vector(0), {}, signal)).length,
@@ -275,4 +305,15 @@ test("packaged daemon has one owner under simultaneous startup and automatically
   }, "windows did not reconnect to a replacement owner");
   const diagnostic = await readFile(path.join(directory, "daemon.log"), "utf8");
   assert.doesNotMatch(diagnostic, /already owned|owner.lock|API key/);
+});
+
+test("embedding deadline uses 30 minute quiet period bounded by 60 minute age", () => {
+  assert.equal(
+    embeddingDueAt({ firstChanged: 0, lastChanged: 0 }),
+    EMBEDDING_QUIET_MS,
+  );
+  assert.equal(
+    embeddingDueAt({ firstChanged: 0, lastChanged: 45 * 60000 }),
+    EMBEDDING_MAX_AGE_MS,
+  );
 });
