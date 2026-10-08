@@ -35,7 +35,7 @@ To explore an existing service, say “Explore `services/ner`: trace its entrypo
 
 Try the next UI direction with `npm ci` and `npm run prototype:zen`, then open <http://127.0.0.1:4317>. It is a separate browser prototype: calm light/dark styling, a folding file tree/terminal/workboard, editable sample code, local task checkpoints and an issue-to-verification walkthrough. It does not change your running editor.
 
-Voice, integrations, terminal results and collaboration are simulated. [Research, interaction guide and native implementation plan](docs/zen-workbench.md) distinguish what works locally from the proposed production design.
+Light/dark appearance, host/guest controls and configurable specialist-agent examples are included. Memory has no workboard tab. Voice, integrations, terminal results, agent runs and collaboration are simulated. [Research, interaction guide and native implementation plan](docs/zen-workbench.md) distinguish what works locally from the proposed production design.
 
 ## Features
 
@@ -51,7 +51,7 @@ These features are implemented in the prototype; this is not a production-readin
 | Code pointing       | Spoken explanations can highlight code; Follow Pair controls automatic scrolling.                                                                                          |
 | Project exploration | Isolated read-only researcher, scoped file/text search, batched reads, and language-service references.                                                                    |
 | Semantic retrieval  | Local Turso index, OpenAI small embeddings at 768 dimensions, hybrid search, service/repository filters, incremental updates, and unsaved-buffer handling.                 |
-| Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance. |
+| Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance.                                        |
 | External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                       |
 | Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap. |
 | Collaboration       | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                       |
@@ -77,21 +77,18 @@ Milestone acceptance: demonstrate this interaction on an existing service at voi
 - [ ] Bring the [Zen workbench design study](docs/zen-workbench.md) into the native editor: calm theme, reduced chrome, folding workboard and persistent voice controls. The browser example is an interaction prototype only.
 - [ ] Persist task-linked session checkpoints, decisions and checkout context; resume after restart without automatically starting the microphone.
 - [ ] Connect Linear issues to GitHub PR/review/CI evidence and AWS/GCP deployment/integration results, tied to the exact revision and explicit action permissions.
-- [ ] Add shared task rooms, then concurrent editing and coordinated multi-person voice pairing with the AI. Independent navigation and opt-in following come first.
+- [ ] Add shared editable task workspaces: both people edit code/files, while the inviter owns the single assistant and its controls. Keep independent navigation, optional following and explicit host-loss behavior.
+- [ ] Add Zen-owned Reviewer, Delivery and SRE specialists with configurable rules and enforced tool profiles. Review runs on command; delivery tracks approved merges/deployments; SRE monitors scoped cloud/Sentry evidence in the background. See [the detailed design](docs/local-memory-and-shared-tasks.md).
 
-### Proposed: durable project and personal memory
+### Proposed: automatic local memory
 
-- [ ] **Pilot optional memory behind a provider adapter**, with [Hindsight](https://github.com/vectorize-io/hindsight) as a candidate rather than a committed dependency. Start with explicit “remember this,” project decisions with rationale, and a short session-resume brief. No memory service is implemented or enabled yet.
+- [ ] Pilot [Hindsight](https://github.com/vectorize-io/hindsight) behind a supervised local adapter. Memory runs automatically for the computer owner, with repository/service/task scope; no Memory tab and no shared team memory bank. No memory service is implemented or enabled yet.
 
-Potential implementation:
+Retain useful outcomes and corrections asynchronously, recall scoped evidence beside current code retrieval, and keep reflection off the speech path. Store provenance and distinguish proposed, accepted and verified results. Private Settings provides inspect/correct/forget/disable controls. Personal memory and provider credentials never enter a shared task room automatically.
 
-- Keep current source retrieval in Turso and live cursor/buffer state in the editor. Durable memory holds preferences, decisions, verified findings and unfinished work, with separate personal and shared project scopes.
-- Call the memory provider from the extension host through its TypeScript client or HTTP API. Recall relevant evidence alongside code search; retain compact outcome records asynchronously. Keep memory failures and slow reflection off the speech-critical path.
-- Store source/commit references and distinguish proposed, accepted and verified outcomes. Revalidate code-related memories against current files; current user instructions and repository rules take precedence over inferred memories.
-- Provide inspect, correct, forget and disable controls. Choose storage/inference destinations explicitly; local hosting does not imply local model inference. Do not ingest raw transcripts or private code automatically as part of the pilot.
-- Evaluate a separately hosted Hindsight service first; it has its own database/model dependencies and does not replace our embedded Turso index. Background project summaries are a possible later optimization.
+Hindsight's local daemon uses its own PostgreSQL-backed storage, separate from Turso. Local inference is a separate model configuration choice. See [research, lifecycle and packaging considerations](docs/local-memory-and-shared-tasks.md) before implementation.
 
-Acceptance: a new session recalls a relevant decision, respects a correction/deletion, avoids cross-project or cross-user leakage, and remains usable when memory is unavailable. Measure recall usefulness, added latency and model cost before making it a default feature.
+Acceptance: automatic relevant recall after restart; correction/deletion and stale-source handling; owner/repository isolation; no private-memory leakage into shared sessions; usable pairing while memory is unavailable. Measure latency, quality, resource use and model cost.
 
 ### Later
 

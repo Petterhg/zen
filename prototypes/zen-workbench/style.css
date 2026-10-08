@@ -1209,3 +1209,46 @@ body.light .primary:hover {
     transition: none !important;
   }
 }
+
+.agent-card {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.agent-title,
+.agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+}
+.agent-title {
+  margin-bottom: 8px;
+}
+.agent-title h3 {
+  font-size: 15px;
+  font-weight: 500;
+}
+.agent-actions {
+  margin-top: 12px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.agent-result {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+.agent-rules {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  margin: 14px 0;
+  padding: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font: 12px/1.7 var(--mono);
+  resize: vertical;
+}

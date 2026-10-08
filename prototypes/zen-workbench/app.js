@@ -136,6 +136,7 @@ let boardTab = "task",
   following = false,
   focus = false,
   proposal = null,
+  guest = false,
   toastTimer;
 const esc = (s) =>
   String(s).replace(
@@ -276,7 +277,14 @@ function render() {
       : state.assistance < 50
         ? "Guide me"
         : "Draft with me") + " <span>⌄</span>";
-  $("suggest").disabled = state.assistance === 0;
+  $("suggest").disabled = guest || state.assistance === 0;
+  for (const id of ["voice", "voiceSettings", "runTests", "terminalCommand"])
+    $(id).disabled = guest;
+  $("acceptEdit").disabled =
+    guest || Boolean(proposal && proposal.before !== r.buffers["retry.ts"]);
+  $("rejectEdit").disabled = guest;
+  if (guest)
+    $("voiceCaption").textContent = "Guest view · host owns the assistant";
   layout();
   renderCode();
   renderBoard();
@@ -295,26 +303,23 @@ function renderBoard() {
   if (boardTab === "delivery") {
     const stages = [
       ["Code", "Working draft in this task"],
-      ["Review", "Bot finding + human review"],
+      ["Review", "Your reviewer · rules + conventions"],
       ["Merge", "Review acknowledged; merge is a separate action"],
-      ["Deliver", "CI / deployment evidence"],
-      ["Verify", "Integration checks against the deployed revision"],
+      ["Deliver", "Delivery agent · CI + deployed revision"],
+      ["Verify", "SRE evidence + integration checks"],
       ["Next task", "Verified outcome, saved context"],
     ];
     const labels = [
       "Prepare demo PR",
       r.fixed ? "Acknowledge demo review" : "Apply review suggestion",
       "Simulate approved merge",
-      "Inspect demo deployment",
+      "Track with delivery agent",
       "Run demo integration checks",
       "Choose next task",
     ];
     $("boardContent").innerHTML =
-      `<section class="board-block"><span class="eyebrow">FROM INTENT TO VERIFIED</span><p class="body-copy">One thread through the whole change. Every result belongs to a revision.</p><div class="pipeline">${stages.map((v, i) => `<div class="stage ${i === r.stage ? "active" : i < r.stage ? "done" : ""}"><span class="stage-dot">${i < r.stage ? "✓" : i + 1}</span><div>${v[0]}<p>${v[1]}</p></div></div>`).join("")}</div><div class="note">${["Start with a small, reviewable change. Checks and review stay attached to this task.", "Review bot · demo finding: cancellation needs to be checked before the next attempt.", "Demo review resolved. Merge still requires an explicit human action.", "Demo commit a41f29c · staging. A passing build alone does not establish deployment health.", "Demo staging revision a41f29c. Verify both environment and application behavior.", "Demo checks passed for a41f29c. Save the outcome and choose the next task."][r.stage]}</div><button class="primary stage-action" id="nextStage">${labels[r.stage]}</button>${r.stage === 4 ? '<button class="text-button" id="failCheck">Simulate a failed integration check</button>' : ""}<p class="modal-note">Simulation only. No PR, merge, deployment or cloud test is performed.</p></section>`;
+      `<section class="board-block"><span class="eyebrow">FROM INTENT TO VERIFIED</span><p class="body-copy">One thread through the whole change. Every result belongs to a revision.</p><div class="pipeline">${stages.map((v, i) => `<div class="stage ${i === r.stage ? "active" : i < r.stage ? "done" : ""}"><span class="stage-dot">${i < r.stage ? "✓" : i + 1}</span><div>${v[0]}<p>${v[1]}</p></div></div>`).join("")}</div><div class="note">${["Start with a small, reviewable change. Checks and review stay attached to this task.", "Zen reviewer · demo finding: cancellation needs to be checked before the next attempt.", "Demo review resolved. Merge still requires an explicit human action.", "Demo commit a41f29c · staging. A passing build alone does not establish deployment health.", "Demo staging revision a41f29c. Verify both environment and application behavior.", "Demo checks passed for a41f29c. Save the outcome and choose the next task."][r.stage]}</div><button class="primary stage-action" id="nextStage">${labels[r.stage]}</button>${r.stage === 4 ? '<button class="text-button" id="failCheck">Simulate a failed integration check</button>' : ""}<p class="modal-note">Simulation only. No PR, merge, deployment or cloud test is performed.</p></section>`;
   }
-  if (boardTab === "memory")
-    $("boardContent").innerHTML =
-      `<section class="board-block"><span class="eyebrow">CONTEXT WITH A PLACE</span><div class="memory-path">studio <span>›</span> gateway <span>›</span> ${t.id}</div><p class="body-copy">Decisions stay close to the work. Open the evidence before trusting an old assumption.</p><div class="memory-item"><strong>REPOSITORY · CONVENTION</strong>Keep changes small and reviewable. Proposed shared note.</div><div class="memory-item"><strong>SERVICE · GATEWAY</strong>Requests own their retry lifecycle.<br><span class="subtle">Demo evidence: retry.ts · revalidate against current code</span></div><div class="memory-item"><strong>TASK · DECISION</strong>${esc(t.note)}</div>${r.notes.map((n, i) => `<div class="memory-item"><button data-forget="${i}" aria-label="Forget note ${i + 1}">Forget</button><strong>TASK · YOUR NOTE</strong>${esc(n)}</div>`).join("")}<form class="note-form" id="noteForm"><input id="noteInput" placeholder="Remember a decision…" aria-label="Task memory note" maxlength="500" required><button class="primary">Save</button></form><p class="modal-note">Local browser notes. No Hindsight service is connected. Personal preferences would stay separate from shared project memory.</p></section>`;
   if ($("resumeSession")) $("resumeSession").onclick = toggleVoice;
   if ($("sessionNotes")) $("sessionNotes").onclick = history;
   if ($("nextStage")) $("nextStage").onclick = advance;
@@ -325,24 +330,12 @@ function renderBoard() {
         "Demo check failed. Task stays in Verify; no next-issue transition.",
       );
     };
-  if ($("noteForm"))
-    $("noteForm").onsubmit = (e) => {
-      e.preventDefault();
-      const v = $("noteInput").value.trim();
-      if (v) {
-        r.notes.push(v);
-        save();
-        renderBoard();
-      }
-    };
-  for (const b of document.querySelectorAll("[data-forget]"))
-    b.onclick = () => {
-      r.notes.splice(Number(b.dataset.forget), 1);
-      save();
-      renderBoard();
-    };
+  for (const id of ["resumeSession", "nextStage", "failCheck"]) {
+    if ($(id)) $(id).disabled = guest;
+  }
 }
 function toggleVoice() {
+  if (!hostAction()) return;
   voice = !voice;
   const r = record();
   if (!voice) {
@@ -369,6 +362,7 @@ function log(text) {
   $("terminalOutput").scrollTop = $("terminalOutput").scrollHeight;
 }
 function runChecks() {
+  if (!hostAction()) return;
   record().tests = true;
   state.terminal = true;
   layout();
@@ -379,6 +373,7 @@ function runChecks() {
   notify("Demo test result recorded. No code or shell command was executed.");
 }
 function propose() {
+  if (!hostAction()) return;
   if (state.assistance === 0) {
     notify("Voice-only mode: explain without writing code.");
     return;
@@ -397,6 +392,7 @@ function propose() {
   $("proposal").scrollIntoView({ block: "nearest" });
 }
 function accept() {
+  if (!hostAction()) return;
   const r = record();
   if (!proposal) return;
   if (
@@ -421,12 +417,14 @@ function accept() {
   );
   r.fixed = true;
   r.tests = false;
+  invalidateAgentEvidence();
   proposal = null;
   save();
   render();
   notify("Accepted into the local draft. Verify before moving on.");
 }
 function advance() {
+  if (!hostAction()) return;
   const r = record();
   if (r.stage === 5) {
     board();
@@ -448,6 +446,7 @@ function advance() {
       `<p class="body-copy">This simulates approval for ${task().id} at revision a41f29c. Real GitHub rules and review requirements would still apply.</p><button class="primary stage-action" id="confirmMerge">Simulate merge · no GitHub write</button>`,
     );
     $("confirmMerge").onclick = () => {
+      if (!hostAction()) return;
       r.stage = 3;
       save();
       $("modal").close();
@@ -465,6 +464,7 @@ function openModal(eyebrow, title, body) {
   $("modal").showModal();
 }
 function selectTask(id) {
+  if (!hostAction()) return;
   if (voice) toggleVoice();
   state.active = id;
   record();
@@ -493,18 +493,43 @@ function history() {
     `<p class="body-copy">${esc(task().resume)}</p><div class="modal-row"><div>Session scope<p>studio / gateway / ${task().id}</p></div><span class="subtle">LOCAL DEMO</span></div>${r.sessions.map((s) => `<div class="memory-item"><strong>${esc(new Date(s.time).toLocaleString())}</strong>${esc(s.summary)}</div>`).join("") || '<p class="modal-note">Pause a demo pairing session to save a moment here. Reloading the page preserves task notes and drafts; it never starts a microphone.</p>'}<p class="modal-note">A production session would retain approved decisions and a resumable summary. Raw audio recording is a separate, explicit choice.</p>`,
   );
 }
+function hostAction() {
+  if (!guest) return true;
+  notify(
+    "The task host owns assistant controls. You can still edit shared code.",
+  );
+  return false;
+}
 function collaboration() {
   openModal(
-    "PAIRING ROOM · DEMO",
-    "Two people. One shared intent.",
-    `<p class="body-copy">Share this task’s code, decisions and AI context. Keep independent navigation; follow only when you choose.</p><div class="modal-row"><div>You<p>${record().driver === "You" ? "Driving" : "Navigating"} · ${task().id}</p></div><span class="avatar">P</span></div><div class="modal-row"><div>Mira<p>${peer ? "Demo participant · " + (record().driver === "Mira" ? "driving" : "navigating") : "Not connected"}</p></div><button id="joinPeer" class="primary">${peer ? "Remove demo peer" : "Simulate joining"}</button></div>${peer ? '<div class="modal-row"><button id="followPeer" class="text-button">' + (following ? "Stop following" : "Follow Mira in editor") + '</button><button id="handoff" class="text-button">Hand off driver</button></div>' : ""}<p class="modal-note">Presence and following are simulated. No invite is sent and no live multi-user editing or audio is connected. Terminal execution and AI edit acceptance would have an explicit owner.</p>`,
+    "SHARED TASK · DEMO",
+    "Both can edit. One assistant.",
+    `<p class="body-copy">One shared task workspace. Each person keeps their own cursor, tabs and appearance. You invited Mira, so the assistant remains yours.</p>
+    <div class="modal-row"><div>You · task host<p>Can edit · assistant on/off, settings and specialists</p></div><span class="avatar">P</span></div>
+    <div class="modal-row"><div>Mira · collaborator<p>${peer ? "Can edit shared files · can speak to the same assistant" : "Not connected"}</p></div><button id="joinPeer" class="primary" ${guest ? "disabled" : ""}>${peer ? "Remove demo peer" : "Simulate joining"}</button></div>
+    ${peer ? `<div class="modal-row"><button id="followPeer" class="text-button">${following ? "Stop following" : "Follow Mira in editor"}</button><button id="peerEdit" class="text-button">Simulate Mira editing</button></div>` : ""}
+    <div class="modal-row"><div>One assistant · host-owned<p>Inviting or following never starts a second assistant.</p></div><button id="previewGuest" class="primary">${guest ? "Return to host view" : "Preview guest view"}</button></div>
+    <p class="modal-note">Shared editing and presence are simulated in this browser. Guest view disables assistant controls, not typing. Host memory stays private and is never copied into the room. In production, losing the host pauses the assistant; ownership never transfers automatically.</p>`,
   );
   $("joinPeer").onclick = () => {
+    if (!hostAction()) return;
     peer = !peer;
     following = false;
     render();
     $("modal").close();
     collaboration();
+  };
+  $("previewGuest").onclick = () => {
+    guest = !guest;
+    peer = true;
+    following = false;
+    render();
+    $("modal").close();
+    notify(
+      guest
+        ? "Guest preview: edit freely; assistant controls belong to the host."
+        : "Host view restored. Assistant ownership never changed.",
+    );
   };
   if ($("followPeer"))
     $("followPeer").onclick = () => {
@@ -512,19 +537,121 @@ function collaboration() {
       render();
       $("modal").close();
     };
-  if ($("handoff"))
-    $("handoff").onclick = () => {
-      record().driver = record().driver === "You" ? "Mira" : "You";
+  if ($("peerEdit"))
+    $("peerEdit").onclick = () => {
+      record().buffers["retry.ts"] +=
+        "// Mira: also verify cancellation before the first attempt.\n";
+      draftChanged();
+      save();
+      render();
+      $("modal").close();
+      notify(
+        "Simulated collaborator edit. Earlier proposals and review evidence need revalidation.",
+      );
+    };
+}
+const specialists = {
+  reviewer: {
+    name: "Reviewer",
+    purpose:
+      "Run on command. Review the current change against your rules and conventions.",
+    tools: "Diff · scoped code search · references · approved checks",
+    rules:
+      "Prioritize concrete regressions. Cite file, line and trigger. Read project conventions. Report coverage and uncertainty; never claim unrun tests passed.",
+  },
+  delivery: {
+    name: "Delivery",
+    purpose:
+      "Merge an approved revision, then follow its CI and deployment to the target environment.",
+    tools: "PR checks · approved merge · Actions · deployment status",
+    rules:
+      "Bind approvals to the exact revision. Respect repository rules. Track the deployed artifact. Stop and report failures; never treat merge as deployment success.",
+  },
+  sre: {
+    name: "SRE",
+    purpose:
+      "Watch an environment over time. Bring back actionable errors, not a stream of progress.",
+    tools: "Cloud logs · Sentry · deployment markers · integration results",
+    rules:
+      "Read only by default. Group duplicates, correlate with releases and cite evidence. Escalate new or worsening incidents. Never restart or roll back without authorization.",
+  },
+};
+function agentState() {
+  return (record().agentRuns ||= {});
+}
+function agents() {
+  openModal(
+    "HOST'S SPECIALISTS · DEMO",
+    "One pair. Focused help.",
+    `<p class="body-copy">These workers report to the same assistant. They do not open another voice session. The host defines their rules and tool access.</p>
+    ${Object.entries(specialists)
+      .map(
+        ([id, a]) =>
+          `<section class="agent-card"><div class="agent-title"><h3>${a.name}</h3><span class="subtle">${id === "sre" ? "BACKGROUND" : "ON COMMAND"}</span></div><p class="body-copy">${a.purpose}</p><p class="agent-result" data-result="${id}">${esc(agentState()[id] || "No demo run yet.")}</p><div class="agent-actions"><button class="primary" data-run="${id}" ${guest ? "disabled" : ""}>${id === "sre" ? (record().watching ? "Stop demo watch" : "Start demo watch") : "Run demo"}</button><button class="text-button" data-configure="${id}" ${guest ? "disabled" : ""}>Rules & tools</button>${id === "sre" && record().watching ? '<button class="text-button" id="injectIncident" ' + (guest ? "disabled" : "") + ">Simulate error</button>" : ""}</div></section>`,
+      )
+      .join("")}
+    <p class="modal-note">Local UI fixtures only. Rules are saved in this browser; no model, GitHub, cloud logs or Sentry connection runs. Background monitoring in production requires the host computer to remain awake, or a separately authorized worker.</p>`,
+  );
+  for (const b of document.querySelectorAll("[data-run]"))
+    b.onclick = () => {
+      if (!hostAction()) return;
+      const id = b.dataset.run;
+      if (id === "reviewer")
+        agentState().reviewer = record().fixed
+          ? "Demo review: guard present. Tests and wider caller impact remain unchecked."
+          : "Demo finding: check cancellation before starting the next attempt. retry.ts:14";
+      if (id === "delivery") {
+        agentState().delivery =
+          "Demo tracking: awaiting an approved revision. No merge or deployment performed.";
+        boardTab = "delivery";
+        state.board = true;
+      }
+      if (id === "sre") {
+        record().watching = !record().watching;
+        agentState().sre = record().watching
+          ? "Demo watch started · no live source connected."
+          : "Demo watch stopped.";
+      }
+      save();
+      render();
+      $("modal").close();
+      agents();
+    };
+  for (const b of document.querySelectorAll("[data-configure]"))
+    b.onclick = () => configureAgent(b.dataset.configure);
+  if ($("injectIncident"))
+    $("injectIncident").onclick = () => {
+      if (!hostAction()) return;
+      agentState().sre =
+        "Fixture incident: gateway 5xx increased after a41f29c in staging. Check logs and the retry change; causality is unverified.";
       save();
       $("modal").close();
-      collaboration();
+      agents();
     };
+}
+function configureAgent(id) {
+  if (!hostAction()) return;
+  const a = specialists[id];
+  $("modal").close();
+  openModal(
+    "SPECIALIST DEFINITION · LOCAL DEMO",
+    a.name,
+    `<label class="body-copy" for="agentRules">Rules and conventions</label><textarea id="agentRules" class="agent-rules" maxlength="3000">${esc(state.agentRules?.[id] || a.rules)}</textarea><p class="modal-note">Tool profile: ${a.tools}. A prompt cannot grant tool permissions; the host enforces the profile.</p><button class="primary" id="saveAgentRules">Save definition</button>`,
+  );
+  $("saveAgentRules").onclick = () => {
+    if (!hostAction()) return;
+    state.agentRules ||= {};
+    state.agentRules[id] = $("agentRules").value.trim() || a.rules;
+    save();
+    $("modal").close();
+    agents();
+  };
 }
 function commands() {
   openModal(
     "COMMANDS",
     "A quieter way around.",
-    `<div class="command-list"><button data-command="task">Choose a task <kbd>⌘K</kbd></button><button data-command="focus">Toggle focus mode <kbd>⌘⇧F</kbd></button><button data-command="board">Toggle workboard <kbd>⌘J</kbd></button><button data-command="terminal">Toggle terminal</button><button data-command="files">Toggle file tree</button><button data-command="history">Task session history</button><button data-command="theme">Switch appearance</button></div>`,
+    `<div class="command-list"><button data-command="task">Choose a task <kbd>⌘K</kbd></button><button data-command="focus">Toggle focus mode <kbd>⌘⇧F</kbd></button><button data-command="board">Toggle workboard <kbd>⌘J</kbd></button><button data-command="terminal">Toggle terminal</button><button data-command="files">Toggle file tree</button><button data-command="history">Task session history</button><button data-command="agents">Specialist agents</button><button data-command="theme">Switch appearance</button></div>`,
   );
   for (const b of document.querySelectorAll("[data-command]"))
     b.onclick = () => {
@@ -540,6 +667,7 @@ function commands() {
           save();
         },
         history,
+        agents,
         theme: toggleTheme,
       })[b.dataset.command]();
     };
@@ -570,8 +698,14 @@ function toggleTheme() {
   layout();
   save();
 }
-$("code").addEventListener("input", () => {
-  record().buffers[record().file] = $("code").value;
+function invalidateAgentEvidence() {
+  if (agentState().reviewer)
+    agentState().reviewer = "Draft changed · run a new review.";
+  if (agentState().delivery)
+    agentState().delivery =
+      "Draft changed · earlier approval cannot authorize this revision.";
+}
+function draftChanged() {
   record().tests = false;
   record().fixed = record().buffers["retry.ts"].includes(
     "    signal?.throwIfAborted();",
@@ -579,10 +713,10 @@ $("code").addEventListener("input", () => {
   // Editing a verified draft invalidates that draft's demo delivery evidence.
   record().stage = 0;
   $("stageLabel").textContent = "In progress";
+  invalidateAgentEvidence();
   renderBoard();
   following = false;
   $("collabCursor").hidden = true;
-  paintCode();
   save();
   $("changedStatus").textContent = "Local draft changed";
   if (proposal && record().file === "retry.ts") {
@@ -590,7 +724,13 @@ $("code").addEventListener("input", () => {
     $("proposalNote").textContent =
       "Source changed · discard this stale proposal and request a new one.";
   }
+}
+$("code").addEventListener("input", () => {
+  record().buffers[record().file] = $("code").value;
+  draftChanged();
+  paintCode();
 });
+$("openAgents").onclick = agents;
 $("home").onclick = $("projectBoard").onclick = $("taskPicker").onclick = board;
 $("voice").onclick = toggleVoice;
 $("sessionHistory").onclick = history;
@@ -623,6 +763,7 @@ $("suggest").onclick = () => {
 };
 $("acceptEdit").onclick = accept;
 $("rejectEdit").onclick = () => {
+  if (!hostAction()) return;
   proposal = null;
   renderCode();
 };
@@ -630,6 +771,7 @@ $("runTests").onclick = runChecks;
 $("terminalTab").onclick = () => $("terminalCommand").focus();
 $("terminalForm").onsubmit = (e) => {
   e.preventDefault();
+  if (!hostAction()) return;
   const input = $("terminalCommand"),
     cmd = input.value.trim();
   input.value = "";
@@ -655,6 +797,7 @@ for (const b of document.querySelectorAll("[data-board]"))
     renderBoard();
   };
 $("voiceSettings").onclick = () => {
+  if (!hostAction()) return;
   openModal(
     "ASSISTANCE",
     "Set the pace.",

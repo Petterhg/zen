@@ -11,9 +11,9 @@ npm run prototype:zen
 
 Open <http://127.0.0.1:4317>. No keys, microphone permission or editor bootstrap needed. `ZEN_PROTOTYPE_PORT` changes the port. The server binds to localhost and serves only the four prototype assets.
 
-Try folding the workboard, switching appearance, focus mode, typing in the editor, accepting/discarding a proposal, and changing assistance to zero. Choose a task from its ID or project name. Add a Memory note, pause a pairing session, switch tasks and return; reload to check persistence. Delivery walks through a synthetic review, explicit merge handoff, deployment and integration checks. The pairing room demonstrates optional following and driver handoff.
+Try folding the workboard, switching appearance, focus mode, typing in the editor, accepting/discarding a proposal, and changing assistance to zero. Choose a task from its ID or project name. Pause a pairing session, switch tasks and return; reload to check persistence. Delivery walks through a synthetic review, explicit merge handoff, deployment and integration checks. Specialists opens Reviewer, Delivery and SRE fixture controls and editable rules. The pairing room demonstrates optional following and a guest view: both people can edit, while the inviter keeps assistant ownership.
 
-**Real in this example:** layout, editable sample buffers, per-task browser persistence, notes, local session checkpoints, proposal acceptance/stale-source protection, assistance controls, light/dark appearance, and keyboard commands.
+**Real in this example:** layout, editable sample buffers, per-task browser persistence, local session checkpoints, specialist definition editing, proposal acceptance/stale-source protection, assistance controls, light/dark appearance, and keyboard commands.
 
 **Simulated:** AI, voice, indexing status, terminal execution, Linear, GitHub, deployment/test results, remote presence and collaboration. Every task uses the same small gateway code fixture for layout testing. The textarea is a lightweight stand-in for the production editor, with no language service or full editor undo contract. The native app would keep Monaco, xterm, language extensions and its existing inline-edit renderer. Browser storage is local to this browser and origin; it is not a synchronized task store or durable backup. No external requests or raw audio recording occur.
 
@@ -39,11 +39,11 @@ The code is the main surface. Use warm charcoal or soft stone backgrounds, muted
 
 Keep a narrow file tree, small tabs, one task title, a folding terminal and one folding workboard. The prototype has no activity bar, minimap, permanent search box, large chat composer, dashboard grid, duplicated AI controls or progress feed. Put infrequent navigation behind a command palette. Preserve search, Git, diagnostics, extensions and debugging as accessible commands/views. A minimal default must not remove the language tooling people rely on.
 
-The workboard has three modes:
+The workboard has two modes:
 
 - **Task:** intent, the current small step, decisions, resume context and useful research. Relevant documentation opens here on demand.
 - **Delivery:** the next actionable review or verification result, with evidence links. The full lifecycle is available when requested, not constantly competing with code.
-- **Memory:** inspectable repository/service/task notes with provenance, freshness and a way to forget or correct them.
+  Memory runs privately in the background, with controls in Settings rather than a workboard tab. A compact Specialists entry opens on-demand review and Delivery/SRE controls without adding a dashboard. See [local memory and shared tasks](local-memory-and-shared-tasks.md) for the current ownership and implementation contract.
 
 Voice is a participant, not a running transcript. Show connected/listening/muted/speaking states and one clear stop control. Keep transcript access in history/diagnostics. Do not announce every lookup or narrate unchanged progress. Typing, navigation, folding panels and changing assistance must not restart the speaker. At zero assistance, explain only. Optional code pointing must not steal the human's cursor.
 
@@ -76,7 +76,7 @@ Persist approved decisions and compact checkpoints after meaningful work, includ
 
 For a first production slice, host-local Turso can hold task metadata, checkpoints and evidence references. Keep credentials in SecretStorage. A future shared room needs an authenticated synchronization service; a local database by itself is not multi-user collaboration.
 
-Memory can sit behind a provider interface, with Hindsight as a candidate rather than a prerequisite. Namespace knowledge by organization/repository/service/task, with separate personal preferences. Retain source, commit, author, timestamp and review state. Retrieve scoped memories alongside current code, invalidate stale assertions and surface disagreements. Do not automatically promote a task's speculation into a repository convention. Permissions must be enforced independently of hierarchy. See the separate memory roadmap proposal; this prototype only stores explicit local notes.
+Hindsight is the candidate for automatic memory local to the computer owner. This is separate from shared task state and from the existing Turso code index. [Local memory and shared tasks](local-memory-and-shared-tasks.md) covers the researched daemon, retain/recall/reflect pipeline, private scopes and inference destinations. The prototype does not start Hindsight.
 
 ## The issue-to-verification loop
 
@@ -97,13 +97,9 @@ Begin with read-only Linear/GitHub links and status. Add writes deliberately: br
 
 ## Pairing with a colleague
 
-Build in increments:
+Both people run Zen and edit the shared project concurrently, with independent cursors and optional following. The inviter owns the single assistant: start/stop, settings, tools and specialist agents. Collaboration does not transfer this ownership. Guest file edits invalidate stale AI proposals and review evidence exactly as host edits do.
 
-1. **Shared task room:** identity, presence, approved notes/checkpoints and voice participants. Both people see the same task, but retain independent navigation. Joining a task is not automatically permission to access every repository, shell or secret.
-2. **Shared editing:** evaluate Yjs or an existing collaboration integration with Code-OSS buffers. Test concurrent edits, reconnect, undo, file rename/delete, language-server ownership and conflicts with AI proposals. Keep proposals anchored to document versions and show who accepted each change.
-3. **Shared assistant:** one task coordinator prevents duplicate tools and conflicting proposals. Give voice tracks speaker identity; route tool authority through the current driver. Design turn-taking and echo suppression explicitly. Following is opt-in and breaks when a person navigates or types. Driver changes must not silently grant repository/cloud permissions.
-
-Use explicit terminal execution ownership and operation IDs for retries. Approval attribution and durable audit events matter more than synchronized cursors. Raw audio storage remains an explicit, separate choice for all participants. The prototype demonstrates only presence/follow controls; it does not establish a working collaborative backend.
+The proposed implementation combines synchronized text buffers with a host-authoritative filesystem journal. Private memory and credentials are never part of the shared workspace. Host disconnection pauses the assistant rather than launching a second one on the guest. See the [detailed two-client contract and acceptance checks](local-memory-and-shared-tasks.md#shared-code-and-filesystem).
 
 ## Bringing this into the actual editor
 
@@ -111,6 +107,6 @@ Use explicit terminal execution ownership and operation IDs for retries. Approva
 2. **Native task shell:** replace the generic top chrome with compact project/task identity and add a persistent voice strip. Reuse Code-OSS layout services, Monaco, xterm, language tooling and native proposal renderer. Implement the workboard in the existing extension/webview, with typed host messages; no provider keys in the webview. Keep runtime/source overlays coherent.
 3. **Durable local task state:** task switcher, checkout linkage, checkpoint storage, restore/reconciliation and history. First acceptance: resume a real task after restarting the editor, with correct unsaved-buffer handling and no microphone auto-start.
 4. **One connected lifecycle:** one Linear issue and GitHub PR, event-backed read-only status, then authorized operations. First acceptance: new commits invalidate stale results; a failed integration check keeps the task incomplete.
-5. **Collaboration:** shared task room, then shared buffers and coordinated AI. Validate two real clients, lost connections, independent navigation, speaker identity and conflicting edits before calling it pair programming.
+5. **Collaboration:** shared task room, then shared buffers and the host-owned assistant. Validate two real clients, lost connections, independent navigation, speaker identity and conflicting edits before calling it pair programming.
 
 The browser study is a design/interaction reference. It is not a replacement editor framework, a native UI patch, a real session-resumption implementation, or proof of a working cloud delivery pipeline.

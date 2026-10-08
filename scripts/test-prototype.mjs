@@ -48,6 +48,15 @@ try {
   const original = await code.inputValue();
   await mkdir("artifacts/zen-workbench", { recursive: true });
   await page.screenshot({ path: "artifacts/zen-workbench/dark.png" });
+  await click("themeToggle");
+  await page.screenshot({ path: "artifacts/zen-workbench/light-clean.png" });
+  await click("openAgents");
+  await page.screenshot({ path: "artifacts/zen-workbench/specialists.png" });
+  await click("closeModal");
+  await click("collaborate");
+  await page.screenshot({ path: "artifacts/zen-workbench/shared-task.png" });
+  await click("closeModal");
+  await click("themeToggle");
 
   await click("hideBoard");
   assert.equal(await visible("workboard"), false);
@@ -82,30 +91,16 @@ try {
   assert.match(await text("modalBody"), /traced cancellation/);
   await click("closeModal");
 
-  await page.getByRole("tab", { name: "Memory", exact: true }).click();
-  await page
-    .getByLabel("Task memory note")
-    .fill("Keep cancellation errors intact <script>");
-  await page.locator("#noteForm button").click();
+  assert.equal(
+    await page.getByRole("tab", { name: "Memory", exact: true }).count(),
+    0,
+  );
   await click("taskPicker");
   await page.locator('[data-task="ZEN-148"]').click();
   assert.equal(await code.inputValue(), original);
   await click("taskPicker");
   await page.locator('[data-task="ZEN-142"]').click();
   assert.match(await code.inputValue(), /My own work/);
-  await page.getByRole("tab", { name: "Memory", exact: true }).click();
-  assert.match(
-    await text("boardContent"),
-    /Keep cancellation errors intact <script>/,
-  );
-  await page.reload();
-  await page.getByRole("tab", { name: "Memory", exact: true }).click();
-  assert.match(await text("boardContent"), /Keep cancellation errors intact/);
-  await page.getByRole("button", { name: "Forget note 1" }).click();
-  assert.doesNotMatch(
-    await text("boardContent"),
-    /Keep cancellation errors intact/,
-  );
 
   await click("voiceSettings");
   await page.locator("#assistance").fill("60");
@@ -150,6 +145,66 @@ try {
   await code.fill((await code.inputValue()) + "// Independent navigation\n");
   assert.equal(await visible("collabCursor"), false);
   assert.equal(await text("stageLabel"), "In progress");
+  await click("openAgents");
+  await page.locator('[data-configure="reviewer"]').click();
+  await page
+    .locator("#agentRules")
+    .fill("Check retry conventions <script> without executing code.");
+  await click("saveAgentRules");
+  await page.locator('[data-run="reviewer"]').click();
+  assert.match(
+    await page.locator('[data-result="reviewer"]').innerText(),
+    /Demo review/,
+  );
+  await page.locator('[data-run="sre"]').click();
+  await click("injectIncident");
+  assert.match(
+    await page.locator('[data-result="sre"]').innerText(),
+    /causality is unverified/,
+  );
+  await page.locator('[data-run="sre"]').click();
+  await click("closeModal");
+  await page.reload();
+  await click("openAgents");
+  await page.locator('[data-configure="reviewer"]').click();
+  assert.match(
+    await page.locator("#agentRules").inputValue(),
+    /conventions <script>/,
+  );
+  await click("closeModal");
+  await code.fill(original);
+  await click("suggest");
+  await click("voice");
+  await click("collaborate");
+  await click("previewGuest");
+  assert.equal(await page.locator("#voice").isDisabled(), true);
+  assert.equal(await page.locator("#voiceSettings").isDisabled(), true);
+  assert.equal(await page.locator("#rejectEdit").isDisabled(), true);
+  assert.equal(await code.isEditable(), true);
+  await code.press("Control+Enter");
+  assert.doesNotMatch(await code.inputValue(), /signal\?\.throwIfAborted/);
+  await code.fill(original + "// Edited by the guest\n");
+  assert.equal(await text("voiceLabel"), "Pause & save");
+  await click("openAgents");
+  assert.equal(await page.locator('[data-run="reviewer"]').isDisabled(), true);
+  assert.match(
+    await page.locator('[data-result="reviewer"]').innerText(),
+    /Draft changed/,
+  );
+  await click("closeModal");
+  await click("collaborate");
+  await click("previewGuest");
+  assert.equal(await page.locator("#voice").isEnabled(), true);
+  assert.match(await code.inputValue(), /Edited by the guest/);
+  await click("voice");
+  await click("rejectEdit");
+  await click("suggest");
+  await click("collaborate");
+  await click("peerEdit");
+  assert.equal(await page.locator("#acceptEdit").isDisabled(), true);
+  assert.match(await code.inputValue(), /Mira: also verify/);
+  await code.press("Control+Enter");
+  assert.equal(await visible("proposal"), false);
   await page.keyboard.press("Control+k");
   assert.equal(await visible("modal"), true);
   await page.keyboard.press("Escape");
