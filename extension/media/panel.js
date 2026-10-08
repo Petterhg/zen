@@ -80,14 +80,14 @@
     $("voiceMark").classList.toggle("muted", connected && muted);
     $("voiceTitle").textContent = connected
       ? muted
-        ? "Take your time."
-        : "Right here with you."
-      : "A little closer to the code.";
+        ? "Microphone muted"
+        : "Pairing together"
+      : "Voice pairing";
     $("voiceDescription").textContent = connected
       ? muted
         ? "Your microphone is muted."
         : "Keep coding. I’m listening."
-      : "Think out loud. Your pair follows along.";
+      : "Start when you’re ready.";
     $("voiceStatus").textContent =
       state === "connecting"
         ? "Connecting to GPT-Live…"
@@ -97,6 +97,7 @@
             : "Listening · GPT-Live"
           : "Voice is disconnected";
     $("mute").textContent = muted ? "Unmute" : "Mute";
+    post({ type: "voiceState", text: state, sessionToken });
   }
   let urgentContext = false;
   function syncContext(force = false) {
@@ -686,6 +687,10 @@
     }
     if (data.type === "error") showError(data.message, "backend");
     if (data.type === "stopVoice") stop();
+    if (data.type === "voiceControl" && data.sessionToken === sessionToken) {
+      if (data.action === "mute") $("mute").click();
+      if (data.action === "end") stop();
+    }
     if (data.type === "liveAppend" && data.sessionToken === sessionToken) {
       if (
         data.passiveKey === "assistanceStyle" &&
@@ -725,6 +730,7 @@
     }
     if (url.protocol !== "https:" || url.username || url.password) return;
     $("researchEmpty").classList.add("hidden");
+    $("researchSection").classList.remove("hidden");
     const container = $("researchPages");
     const previous = Array.from(container.children).find(
       (el) => el.dataset.url === url.href,
@@ -761,6 +767,7 @@
   $("clearResearch").addEventListener("click", () => {
     $("researchPages").replaceChildren();
     $("researchEmpty").classList.remove("hidden");
+    $("researchSection").classList.add("hidden");
     post({ type: "clearResearch" });
   });
   window.addEventListener("beforeunload", stop);

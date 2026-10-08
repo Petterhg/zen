@@ -1,3 +1,4 @@
+import { applyRuntimeShell } from "./native-shell.mjs";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -59,8 +60,8 @@ writeFileSync(
 const productPath = path.join(resources, "product.json");
 const product = JSON.parse(readFileSync(productPath, "utf8"));
 Object.assign(product, {
-  nameShort: "Pair Code",
-  nameLong: "Pair Code",
+  nameShort: "Zen",
+  nameLong: "Zen",
   applicationName: "pair-code",
   dataFolderName: ".pair-code",
   sharedDataFolderName: ".pair-code-shared",
@@ -74,9 +75,10 @@ for (const relative of Object.keys(product.checksums ?? {})) {
     .replace(/=+$/, "");
 }
 writeFileSync(productPath, JSON.stringify(product, null, 2));
+applyRuntimeShell(resources);
 const plist = path.join(app, "Contents/Info.plist");
 for (const [key, value] of Object.entries({
-  CFBundleDisplayName: "Pair Code",
+  CFBundleDisplayName: "Zen",
   CFBundleName: "VSCodium",
   CFBundleIdentifier: "dev.paircode.editor",
   NSMicrophoneUsageDescription:
@@ -102,5 +104,5 @@ if (existsSync(app))
     stdio: "inherit",
   });
 console.log(
-  "Patched isolated runtime: Pair Code branding and audio-only access for the pairing panel.",
+  "Patched isolated runtime: Zen branding and audio-only access for the pairing panel.",
 );

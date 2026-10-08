@@ -49,35 +49,27 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 .identity {
-  height: 55px;
-  padding: 0 20px;
+  height: 42px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
 }
-.wordmark {
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: -1px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.enso {
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--button);
-  border-right-color: transparent;
-  border-radius: 50%;
-  transform: rotate(-25deg);
+.workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
 }
 .header-actions {
   display: flex;
   gap: 2px;
 }
 main {
-  height: calc(100dvh - 55px);
+  height: calc(100dvh - 42px);
   min-height: 230px;
   display: flex;
   flex-direction: column;
@@ -87,26 +79,12 @@ main {
   flex: 1;
   overflow: auto;
   min-height: 0;
-  padding: 0 20px 14px;
+  padding: 14px 16px 10px;
   display: flex;
   flex-direction: column;
 }
 .workboard-scroll > * {
   flex-shrink: 0;
-}
-.workboard-heading {
-  padding: 23px 0 20px;
-}
-h2 {
-  font-size: 16px;
-  font-weight: 450;
-  margin: 8px 0 6px;
-  letter-spacing: -0.25px;
-}
-.workboard-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
 }
 .eyebrow {
   font-size: 9px;
@@ -190,9 +168,7 @@ h2 {
   color: var(--muted);
 }
 .research {
-  flex: 1;
-  min-height: 100px;
-  padding: 24px 0 12px;
+  padding: 18px 0 8px;
 }
 .research-heading,
 .settings-row {
@@ -384,6 +360,7 @@ select {
   cursor: pointer;
 }
 .code-index {
+  margin-top: auto;
   border-top: 1px solid var(--line);
   padding: 8px 0;
 }
@@ -403,7 +380,7 @@ select {
 .voice-card {
   flex-shrink: 0;
   border-top: 1px solid var(--line);
-  padding: 14px 20px 12px;
+  padding: 12px 16px;
   position: relative;
   background: var(--bg);
 }
@@ -493,11 +470,34 @@ h1 {
   .voice-card p {
     display: none;
   }
-  .workboard-heading {
-    padding-top: 15px;
-  }
 }
 
 #checkpointNote {
   overflow-wrap: anywhere;
+}
+
+.index-details {
+  color: var(--muted);
+  font-size: 10px;
+}
+.index-details summary {
+  cursor: pointer;
+}
+.header-actions {
+  flex-shrink: 0;
+}
+.voice-card .session-controls {
+  margin-top: 10px;
+}
+.voice-card #voiceDescription {
+  display: none;
+}
+.voice-mark {
+  top: 13px;
+  right: 18px;
+}
+.pairing-style {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding: 12px 0 8px;
 }

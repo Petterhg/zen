@@ -50,3 +50,36 @@ test("appearance migration preserves user choices and seeds missing defaults", (
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("native shell overlay updates idempotently and preserves upstream CSS", () => {
+  const directory = mkdtempSync(join(tmpdir(), "zen-shell-"));
+  const file = join(directory, "workbench.css");
+  const moduleUrl = new URL("../scripts/native-shell.mjs", import.meta.url)
+    .href;
+  const apply = () =>
+    execFileSync(process.execPath, [
+      "--input-type=module",
+      "-e",
+      `import { applyNativeShell } from ${JSON.stringify(moduleUrl)}; applyNativeShell(process.argv[1]);`,
+      file,
+    ]);
+  try {
+    writeFileSync(file, "body { color: red; }\n");
+    apply();
+    const first = readFileSync(file, "utf8");
+    apply();
+    assert.equal(readFileSync(file, "utf8"), first);
+    assert.ok(first.startsWith("body { color: red; }"));
+    writeFileSync(
+      file,
+      first.replace(
+        "/* zen-native-shell:start */",
+        "/* zen-native-shell:start */\n.old-overlay {}",
+      ),
+    );
+    apply();
+    assert.equal(readFileSync(file, "utf8"), first);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

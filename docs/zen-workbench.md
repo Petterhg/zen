@@ -122,3 +122,9 @@ The proposed implementation combines synchronized text buffers with a host-autho
 5. **Collaboration:** shared task room, then shared buffers and the host-owned assistant. Validate two real clients, lost connections, independent navigation, speaker identity and conflicting edits before calling it pair programming.
 
 The browser study is a design/interaction reference. It is not a replacement editor framework, a native UI patch, a real session-resumption implementation, or proof of a working cloud delivery pipeline.
+
+## Native core UI pass
+
+The shipped companion uses a compact workspace/file header, always-accessible assistance slider, conditional research cards and a fixed voice dock. Index details are expandable; progress and failures remain visible. Settings remain secondary. The status bar exposes acknowledged mute/unmute and end-session controls while voice is connected, including when the workboard is folded. Commands target the current session token; they reuse the panel's mute acknowledgement and disconnect lifecycle.
+
+`scripts/native-shell.css` is the canonical native overlay, installed into both pinned source and the downloaded runtime. The launcher reapplies it idempotently and regenerates runtime checksums before signing. Styling keeps Monaco/xterm, native actions, resizing, keyboard focus and security indicators intact. New appearance defaults preserve existing user choices; Apply Calm Layout opts an existing profile into compact tabs and quiet tree/terminal defaults. This is the individual pairing surface; prototype task boards, team controls and delivery agents remain deferred.

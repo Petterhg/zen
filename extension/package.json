@@ -1,6 +1,6 @@
 {
   "name": "pair-code",
-  "displayName": "Pair Code",
+  "displayName": "Zen",
   "publisher": "pair-code",
   "version": "0.2.1",
   "description": "Continuous voice pairing, grounded in the current editor.",
@@ -32,8 +32,8 @@
         {
           "type": "webview",
           "id": "pairCode.companion",
-          "name": "Workboard",
-          "contextualTitle": "Zen Workboard"
+          "name": "Pairing",
+          "contextualTitle": "Zen"
         }
       ]
     },
@@ -97,6 +97,14 @@
       {
         "command": "pairCode.freshPairing",
         "title": "Zen: Start Fresh Pairing"
+      },
+      {
+        "command": "pairCode.toggleVoiceMute",
+        "title": "Zen: Mute / Unmute Voice"
+      },
+      {
+        "command": "pairCode.endVoice",
+        "title": "Zen: End Voice Session"
       }
     ],
     "keybindings": [
@@ -285,7 +293,14 @@
       "terminal.integrated.lineHeight": 1.4,
       "terminal.integrated.cursorStyle": "line",
       "terminal.integrated.cursorBlinking": false,
-      "terminal.integrated.tabs.enabled": false
+      "terminal.integrated.tabs.enabled": true,
+      "window.density.editorTabHeight": "compact",
+      "workbench.editor.showIcons": false,
+      "terminal.integrated.tabs.showActions": "never",
+      "workbench.tree.indent": 12,
+      "workbench.tree.renderIndentGuides": "none",
+      "terminal.integrated.tabs.hideCondition": "singleTerminal",
+      "terminal.integrated.tabs.showActiveTerminal": "never"
     }
   },
   "enabledApiProposals": [

@@ -1,3 +1,4 @@
+import { applyNativeShell } from "./native-shell.mjs";
 import { readFileSync, writeFileSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -87,11 +88,12 @@ writeFileSync(
     `script-src 'sha256-${scriptHash}'`,
   ),
 );
+applyNativeShell(path.join(source, "src/vs/workbench/browser/media/style.css"));
 const productPath = path.join(source, "product.json");
 const product = JSON.parse(readFileSync(productPath, "utf8"));
 Object.assign(product, {
-  nameShort: "Pair Code",
-  nameLong: "Pair Code",
+  nameShort: "Zen",
+  nameLong: "Zen",
   applicationName: "pair-code",
   dataFolderName: ".pair-code",
   sharedDataFolderName: ".pair-code-shared",

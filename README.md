@@ -33,7 +33,7 @@ Use the **Inline suggestions** control to choose Off, On request (default), or A
 
 To explore an existing service, say “Explore `services/ner`: trace its entrypoints, extraction flow and callers, and tell me what remains unchecked.” Pair delegates research to a separate context. The explorer starts with that directory and follows relevant references outward; the main conversation receives a compact findings report with file/line evidence. Repository exploration uses local tools by default. Ask explicitly for external documentation when you also want web research. Exploration proposes no edits; request an implementation separately. Known files can be read in batches, and native text search overlays unsaved buffers. Compact explorer findings stay available within the voice session and are marked stale after edits. Changing the assistance slider preserves ongoing research and waits for quiet playback before updating the speaker; the new local setting applies immediately.
 
-Use **Zen: Switch Light / Dark** from the command palette or the ◐ button in the workboard. **⌘⌥J** folds and restores the workboard without ending voice pairing. Settings stay collapsed by default; research and current-file context stay on the main surface. **Zen: Apply Calm Layout** applies the quieter layout to an existing profile while keeping its selected theme. New profiles use Zen Dark; custom appearance settings are preserved.
+Use **Zen: Switch Light / Dark** from the command palette or the ◐ button in the workboard. **⌘⌥J** folds and restores the workboard without ending voice pairing. The compact workboard keeps current-file context and the assistance slider visible; settings and index details stay collapsed. Research appears when sources arrive. Index progress and errors remain visible. During voice pairing, the native status bar retains mute/unmute and end-session controls even with the workboard folded. **Zen: Apply Calm Layout** applies the quieter layout to an existing profile while keeping its selected theme. New profiles use Zen Dark; custom appearance settings are preserved. `npm start` updates the maintained native shell styling in your existing runtime, including compact tabs, calmer explorer/panel headings and status bar typography. Quit Zen before restarting.
 
 ## Zen workbench design preview
 
@@ -92,7 +92,7 @@ Acceptance: relevant recall after restarting; explicit corrections supersede ear
 ### Core: calm, editor-first UI
 
 - [ ] Refine the native light/dark themes, typography, terminal and inline edits through actual pairing sessions.
-- [ ] Keep the file tree, editor, terminal and folding workboard focused on the current work. Research and occasional settings belong beside the code; transcripts stay optional diagnostics.
+- [x] Keep the file tree, editor, terminal and folding workboard focused on the current work. Research and occasional settings belong beside the code; transcripts stay optional diagnostics.
 - [ ] Add unobtrusive session resume and useful connection/error states, without requiring a dashboard or task-management workflow.
 
 Native themes, reduced chrome, folding and persistent voice controls are implemented. The broader [browser design study](docs/zen-workbench.md) contains earlier exploratory features; it is not the current feature specification.

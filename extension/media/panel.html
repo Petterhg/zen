@@ -10,9 +10,7 @@
   </head>
   <body>
     <header class="identity">
-      <span class="wordmark"
-        ><span class="enso" aria-hidden="true"></span>zen</span
-      >
+      <span class="workspace-name" id="workspaceLabel">Your workspace</span>
       <div class="header-actions">
         <button
           id="switchTheme"
@@ -43,12 +41,6 @@
     </header>
     <main>
       <div class="workboard-scroll">
-        <div class="workboard-heading">
-          <span class="eyebrow" id="workspaceLabel">YOUR WORKSPACE</span>
-          <h2>A shared place to think.</h2>
-          <p>One small step, close to the code.</p>
-        </div>
-
         <section class="context-bar" aria-label="Shared editor context">
           <span class="file-icon" aria-hidden="true">⌘</span
           ><span id="contextFile">No shared file</span
@@ -59,7 +51,11 @@
           ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
         </div>
         <p id="checkpointNote" class="quiet-note hidden" role="status"></p>
-        <section class="research" aria-label="Research and documentation">
+        <section
+          id="researchSection"
+          class="research hidden"
+          aria-label="Research and documentation"
+        >
           <div class="research-heading">
             <span class="eyebrow">RESEARCH</span
             ><button id="clearResearch" class="text-button">Clear</button>
@@ -93,13 +89,39 @@
             class="hidden"
             aria-label="Files checked in current repository"
           ></progress>
-          <p id="indexDetail" class="quiet-note"></p>
+          <details class="index-details">
+            <summary>Index details</summary>
+            <p id="indexDetail" class="quiet-note"></p>
+          </details>
           <p id="indexError" class="error hidden" role="alert"></p>
         </section>
         <div id="backendActivity" class="backend-activity hidden">
           <span class="working-dot"></span><span>Thinking about your code…</span
           ><button id="cancel" class="text-button">Stop</button>
         </div>
+        <section class="pairing-style" aria-label="Pairing style">
+          <div class="pairing-style-heading">
+            <label for="assistanceLevel">Assistance</label
+            ><output id="assistanceLabel" for="assistanceLevel"
+              >One small step</output
+            >
+          </div>
+          <input
+            id="assistanceLevel"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value="25"
+            aria-describedby="assistanceDescription"
+          />
+          <div class="pairing-style-endpoints">
+            <span>Do nothing</span><span>Draft it for me</span>
+          </div>
+          <p id="assistanceDescription" class="quiet-note">
+            Explain one small step, then wait. Tiny previews when requested.
+          </p>
+        </section>
         <form id="composer" class="composer">
           <label for="message" class="sr-only">Message your pair</label
           ><textarea
@@ -125,29 +147,6 @@
               Apply calm layout
             </button>
           </div>
-          <section class="pairing-style" aria-label="Pairing style">
-            <div class="pairing-style-heading">
-              <label for="assistanceLevel">How much Pair does</label
-              ><output id="assistanceLabel" for="assistanceLevel"
-                >One small step</output
-              >
-            </div>
-            <input
-              id="assistanceLevel"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value="25"
-              aria-describedby="assistanceDescription"
-            />
-            <div class="pairing-style-endpoints">
-              <span>Do nothing</span><span>Draft it for me</span>
-            </div>
-            <p id="assistanceDescription" class="quiet-note">
-              Explain one small step, then wait. Tiny previews when requested.
-            </p>
-          </section>
 
           <div class="context-bar">
             <label for="inlineMode">Inline suggestions</label
@@ -198,8 +197,8 @@
         <div class="voice-mark" id="voiceMark" aria-hidden="true">
           <i></i><i></i><i></i><i></i><i></i>
         </div>
-        <h1 id="voiceTitle">A little closer to the code.</h1>
-        <p id="voiceDescription">Think out loud. Your pair follows along.</p>
+        <h1 id="voiceTitle">Voice pairing</h1>
+        <p id="voiceDescription">Start when you’re ready.</p>
         <div class="session-controls">
           <button id="connect" class="primary">Start Pairing</button>
           <button id="mute" class="secondary hidden">Mute</button>

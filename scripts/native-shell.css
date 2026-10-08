@@ -1,0 +1,64 @@
+/* Native Monaco, xterm and workbench layout remain responsible for interaction.
+   Theme variables also preserve custom and high-contrast themes. Do not hide
+   native actions: they must remain discoverable by keyboard and pointer. */
+.monaco-workbench {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.monaco-workbench .part.titlebar {
+  border-bottom: 1px solid var(--vscode-widget-border, transparent);
+}
+.monaco-workbench .part.titlebar .window-title {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.15px;
+}
+.monaco-workbench .part.sidebar > .title > .title-label h2,
+.monaco-workbench .part.auxiliarybar > .title > .title-label h2 {
+  text-transform: none;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.monaco-workbench .pane-header .title {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.65px;
+}
+.monaco-workbench .part.sidebar .monaco-list-row {
+  border-radius: 4px;
+}
+.monaco-workbench .part.sidebar .monaco-icon-label {
+  font-size: 12px;
+}
+.monaco-workbench
+  .part.editor
+  > .content
+  .editor-group-container
+  > .title
+  .tabs-container
+  > .tab {
+  font-size: 12px;
+  border-radius: 5px 5px 0 0;
+}
+.monaco-workbench
+  .part.panel
+  > .title
+  .composite-bar
+  .action-item
+  .action-label {
+  text-transform: none;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.monaco-workbench .part.statusbar {
+  font-size: 10px;
+}
+.monaco-workbench .monaco-action-bar .action-item .action-label {
+  border-radius: 4px;
+}
+.monaco-workbench .part.sidebar,
+.monaco-workbench .part.auxiliarybar,
+.monaco-workbench .part.panel {
+  box-shadow: none;
+}

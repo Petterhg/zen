@@ -1,3 +1,4 @@
+import { applyRuntimeShell } from "./native-shell.mjs";
 import { existsSync, mkdirSync, writeFileSync, cpSync } from "node:fs";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -58,6 +59,9 @@ for (const file of ["package.json", "dist", "media"])
   cpSync(path.join(extension, file), path.join(installed, file), {
     recursive: true,
   });
+applyRuntimeShell(
+  path.join(root, ".runtime/VSCodium.app/Contents/Resources/app"),
+);
 if (process.platform === "darwin")
   execFileSync(
     "codesign",
@@ -98,4 +102,4 @@ const child = spawn(executable, args, {
   },
 });
 child.unref();
-console.log(`Pair Code opened (process ${child.pid}). Project: ${root}`);
+console.log(`Zen opened (process ${child.pid}). Project: ${root}`);

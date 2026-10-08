@@ -124,6 +124,37 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     100,
   );
 
+  private voiceMute = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    99,
+  );
+  private voiceEnd = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    98,
+  );
+
+  voiceControl(action: "mute" | "end"): void {
+    this.post({
+      type: "voiceControl",
+      action,
+      sessionToken: this.sessionToken,
+    });
+  }
+  private updateVoiceStatus(state: string): void {
+    const connected = state === "listening" || state === "muted";
+    this.status.text = connected
+      ? "$(mic) Zen · " + (state === "muted" ? "Muted" : "Listening")
+      : "$(circle-outline) Zen";
+    this.voiceMute.text = state === "muted" ? "$(mic) Unmute" : "$(mute) Mute";
+    if (connected) {
+      this.voiceMute.show();
+      this.voiceEnd.show();
+    } else {
+      this.voiceMute.hide();
+      this.voiceEnd.hide();
+    }
+  }
+
   constructor(private readonly context: vscode.ExtensionContext) {
     const output = vscode.window.createOutputChannel("Pair Code Diagnostics");
     this.disposables.push(output, this.pointing);
@@ -154,12 +185,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     );
     this.disposables.push(this.codeIndex);
     this.editor = vscode.window.activeTextEditor;
-    this.status.text = "$(circle-outline) Pair";
+    this.updateVoiceStatus("disconnected");
     this.status.command = "pairCode.open";
     this.status.tooltip = "Open your pair programmer";
     this.status.show();
+    this.voiceMute.command = "pairCode.toggleVoiceMute";
+    this.voiceMute.tooltip = "Mute or unmute the pairing microphone";
+    this.voiceEnd.command = "pairCode.endVoice";
+    this.voiceEnd.text = "$(debug-stop) End voice";
+    this.voiceEnd.tooltip = "Disconnect voice pairing";
     this.disposables.push(
       this.status,
+      this.voiceMute,
+      this.voiceEnd,
       vscode.languages.registerInlineCompletionItemProvider(
         { scheme: "file" },
         {
@@ -380,6 +418,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
             this.focus = new FocusTimeline();
             this.invalidateMemoryContext();
             this.researchBriefs.clear();
+            this.updateVoiceStatus("disconnected");
             this.post({ type: "stopVoice" });
           }
           if (event.affectsConfiguration("pairCode.inlineSuggestions")) {
@@ -748,11 +787,22 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.sessionJob?.abort();
         this.sessionToken++;
         this.view = undefined;
+        this.updateVoiceStatus("disconnected");
       }),
     );
   }
   private async handleMessage(message: PanelMessage): Promise<void> {
     try {
+      if (
+        message.type === "voiceState" &&
+        message.sessionToken === this.sessionToken &&
+        ["disconnected", "connecting", "listening", "muted"].includes(
+          message.text ?? "",
+        )
+      ) {
+        this.updateVoiceStatus(message.text!);
+        return;
+      }
       if (
         [
           "toggleTheme",
@@ -906,7 +956,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.sessionToken++;
         this.sessionJob?.abort();
         this.cancel();
-        this.status.text = "$(circle-outline) Pair";
+        this.updateVoiceStatus("disconnected");
         this.clearPointing();
         return;
       }
@@ -981,7 +1031,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           this.targets.reset();
           this.sharedReferenceContent = "";
           this.publishAssistance();
-          this.status.text = "$(mic) Pair · Listening";
+          this.updateVoiceStatus("listening");
           this.clearPointing(); // Resend the map now that Live accepts appends.
           this.publishContext();
         }
@@ -1528,6 +1578,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.lastEditEvent = undefined;
     this.focus = new FocusTimeline();
     this.reject(false);
+    this.updateVoiceStatus("disconnected");
     this.post({ type: "stopVoice" });
     this.post({ type: "checkpointCleared" });
   }
@@ -1543,6 +1594,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.sessionJob?.abort();
     this.sessionToken++;
     this.history.entries = [];
+    this.updateVoiceStatus("disconnected");
     this.post({ type: "stopVoice" });
   }
   async manageMemory(): Promise<void> {
@@ -1821,6 +1873,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     vscode.window.registerWebviewViewProvider("pairCode.companion", companion, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    vscode.commands.registerCommand("pairCode.toggleVoiceMute", () =>
+      companion.voiceControl("mute"),
+    ),
+    vscode.commands.registerCommand("pairCode.endVoice", () =>
+      companion.voiceControl("end"),
+    ),
     vscode.commands.registerCommand("pairCode.resumePairing", () =>
       companion.resumePairing(),
     ),

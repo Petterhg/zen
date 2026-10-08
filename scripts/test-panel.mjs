@@ -159,7 +159,8 @@ try {
     "1",
   );
   assert.equal(await page.locator("#assistanceLevel").inputValue(), "25");
-  assert.equal(await page.locator("#assistanceLevel").isVisible(), false);
+  assert.equal(await page.locator("#assistanceLevel").isVisible(), true);
+  assert.equal(await page.locator("#inlineMode").isVisible(), false);
   await page.locator("#toggleSettings").click();
   await page.locator("#assistanceLevel").fill("0");
   assert.equal(
@@ -530,7 +531,13 @@ try {
       ),
     ),
   );
-  await page.locator("#mute").click();
+  await page.evaluate(() =>
+    window.host({ type: "voiceControl", action: "mute", sessionToken: -1 }),
+  );
+  assert.equal(await page.evaluate(() => window.tracks[0].enabled), true);
+  await page.evaluate(() =>
+    window.host({ type: "voiceControl", action: "mute", sessionToken: 1 }),
+  );
   assert.equal(await page.evaluate(() => window.tracks[0].enabled), false);
   await page.evaluate(() =>
     window.peers[0].channel.emit({
@@ -546,6 +553,14 @@ try {
     }),
   );
   assert.equal(await page.locator("#mute").textContent(), "Unmute");
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some(
+        (m) =>
+          m.type === "voiceState" && m.text === "muted" && m.sessionToken === 1,
+      ),
+    ),
+  );
   await page.locator("#mute").click();
   assert.equal(await page.evaluate(() => window.tracks[0].enabled), false);
   await page.evaluate(() =>

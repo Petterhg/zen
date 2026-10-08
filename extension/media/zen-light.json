@@ -38,7 +38,7 @@
     "editorGroup.border": "#d7dcd0",
     "panel.border": "#d7dcd0",
     "tab.activeBackground": "#f4f3ee",
-    "tab.activeBorder": "#436138",
+    "tab.activeBorder": "#00000000",
     "tab.activeBorderTop": "#436138",
     "panelTitle.activeBorder": "#436138",
     "input.background": "#f9f9f4",
