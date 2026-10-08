@@ -1,3 +1,4 @@
+import { PersonalMemory } from "./memory-service.js";
 import { IndexService } from "./index-service.js";
 import { configurationRequiresCancellation } from "./settings-policy.js";
 import { ResearchBriefs } from "./research-briefs.js";
@@ -85,6 +86,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private research: ResearchArticle[] = [];
   private researchBriefs = new ResearchBriefs();
   private codeIndex: IndexService;
+  private memory: PersonalMemory;
   private inlineJob?: AbortController;
   private backendRunning = false;
   private activeDelegation?: string;
@@ -136,6 +138,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       extensionVersion: context.extension.packageJSON.version,
     });
     output.appendLine(`Local session trace: ${this.trace.file}`);
+    this.memory = new PersonalMemory(context, () =>
+      this.invalidateMemoryContext(),
+    );
+    this.disposables.push(this.memory);
     this.codeIndex = new IndexService(
       context,
       () => this.key("openai"),
@@ -342,6 +348,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       vscode.languages.onDidChangeDiagnostics(() => this.scheduleContext()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("pairCode")) {
+          if (
+            event.affectsConfiguration("pairCode.memoryEnabled") ||
+            event.affectsConfiguration("pairCode.memoryHindsightEnabled") ||
+            event.affectsConfiguration("pairCode.memoryEndpoint") ||
+            event.affectsConfiguration("pairCode.shareEditorContext")
+          )
+            this.memory.changed();
+          if (
+            event.affectsConfiguration("pairCode.memoryEnabled") &&
+            !this.configuration().get("memoryEnabled", true)
+          ) {
+            this.invalidateMemoryContext();
+          }
           if (
             configurationRequiresCancellation((name) =>
               event.affectsConfiguration(name),
@@ -733,7 +752,12 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private async handleMessage(message: PanelMessage): Promise<void> {
     try {
       if (
-        ["toggleTheme", "toggleWorkboard", "applyLayout"].includes(message.type)
+        [
+          "toggleTheme",
+          "toggleWorkboard",
+          "applyLayout",
+          "manageMemory",
+        ].includes(message.type)
       ) {
         await vscode.commands.executeCommand(`pairCode.${message.type}`);
         return;
@@ -907,6 +931,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           version: startupContext?.version,
           historyMessages: previousHistory.length,
         });
+        const startupMemories = await this.memory.reference(
+          "coding preferences explanation pace",
+          await this.memory.scope(startupContext?.uri),
+        );
         const result = await createLiveSession({
           apiKey: key,
           sdp: message.params.sdp,
@@ -917,6 +945,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           ),
           editorContext: editorVoiceContext(startupContext),
           history: previousHistory,
+          memory: startupMemories.map((r) => ({ kind: r.kind, text: r.text })),
           signal: this.sessionJob.signal,
         });
         if (token !== this.sessionToken) return;
@@ -1048,6 +1077,14 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         content:
           "Silent task reference: backend work is running for the latest human request. This is background state, not a spoken update. Wait for the result; answer status only if the human asks.",
       });
+      const memoryScope = await this.memory.scope(context?.uri);
+      const latestHuman =
+        history.filter((e) => e.role === "user").at(-1)?.text ?? "";
+      const memoryReference = await this.memory.reference(
+        latestHuman,
+        memoryScope,
+      );
+      controller.signal.throwIfAborted();
       const configuredEffort = this.configuration().get<string>(
         "reasoningEffort",
         "auto",
@@ -1123,6 +1160,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         timeoutMs:
           this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
         taskState: {
+          personalMemory: memoryReference,
           researchReference: this.researchBriefs.snapshot(),
           lastEditEvent: this.lastEditEvent,
           pendingPreview: this.proposal
@@ -1132,6 +1170,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         assistanceLevel: assistance,
         tools: [
           ...readTools,
+          ...this.memory.tools(latestHuman, memoryScope),
           explorer,
           ...(context
             ? [
@@ -1375,6 +1414,16 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.activeDelegation = undefined;
       }
     }
+  }
+  private invalidateMemoryContext(): void {
+    this.cancel();
+    this.sessionJob?.abort();
+    this.sessionToken++;
+    this.history.entries = [];
+    this.post({ type: "stopVoice" });
+  }
+  async manageMemory(): Promise<void> {
+    await this.memory.manage();
   }
   cancel(): void {
     if (this.backendRunning)
@@ -1643,6 +1692,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     vscode.window.registerWebviewViewProvider("pairCode.companion", companion, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    vscode.commands.registerCommand("pairCode.manageMemory", () =>
+      companion.manageMemory(),
+    ),
     vscode.commands.registerCommand("pairCode.toggleTheme", async () => {
       const light = [
         vscode.ColorThemeKind.Light,

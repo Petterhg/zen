@@ -4,7 +4,7 @@ Design update, 8 October 2026. This is the proposed production architecture. The
 
 ## Current scope supersedes the earlier rollout
 
-The active product is individual voice pair programming, personal memory and UI refinement. Hindsight remains the candidate implementation, not a running integration. Specialist agents, collaboration and delivery sections below preserve earlier research only; they are deferred and must not dictate the first memory implementation.
+The active product is individual voice pair programming, personal memory and UI refinement. The [first personal-memory implementation](personal-memory.md) now supplies a local canonical journal, optional authenticated Hindsight adapter, developer launcher and private controls. The broader pipeline below remains design context. Specialist agents, collaboration and delivery sections below preserve earlier research only; they are deferred and must not dictate the first memory implementation.
 
 Memory should contain four distinct kinds of useful context:
 

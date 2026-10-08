@@ -203,6 +203,12 @@ try {
   await page.locator("#foldWorkboard").click();
   await page.locator("#toggleSettings").click();
   await page.locator("#toggleSettings").click();
+  await page.locator("#manageMemory").click();
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some((m) => m.type === "manageMemory"),
+    ),
+  );
   assert.deepEqual(
     await page.evaluate(() => ({
       peers: window.peers.length,

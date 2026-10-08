@@ -187,3 +187,7 @@ Routine tool progress now stays in the sidebar and trace. A single quiet task-st
 This implements OpenAI's separation of background facts and speech-worthy results, with an explicit conversational policy because thinking context can influence later speech. [Delegation guidance](https://developers.openai.com/api/docs/guides/live-delegation), [prompting guidance](https://developers.openai.com/api/docs/guides/live-prompting).
 
 Validation: type checking, lint, all 60 regression tests, build and simulated panel lifecycle passed. Prompt compliance and actual silence during a new human voice session still require listening; no transcript or private repository code was replayed to a provider for this change.
+
+## Personal memory
+
+Relevant local memories are untrusted reference data, supplied at voice startup and in backend task state. Normal recall does not wait for Hindsight, and background retention never sends a speaking append. Explicit memory privacy actions clear current conversation context and end the voice session; ordinary memory collection, settings-panel opening, typing and assistance changes do not. Current human instructions and current source win. Read [personal-memory.md](personal-memory.md) for scope, freshness, evidence, forget and hosted-processing boundaries.

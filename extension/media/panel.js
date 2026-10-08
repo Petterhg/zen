@@ -468,6 +468,7 @@
     ["switchTheme", "toggleTheme"],
     ["foldWorkboard", "toggleWorkboard"],
     ["applyLayout", "applyLayout"],
+    ["manageMemory", "manageMemory"],
   ]) {
     $(id).addEventListener("click", () => post({ type }));
   }

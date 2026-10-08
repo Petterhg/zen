@@ -19,7 +19,8 @@
     "test:panel": "node scripts/test-panel.mjs",
     "validate": "npm run check && npm run lint && npm run build && npm test && npm run test:panel && npm run test:prototype",
     "prototype:zen": "node scripts/serve-prototype.mjs",
-    "test:prototype": "node scripts/test-prototype.mjs"
+    "test:prototype": "node scripts/test-prototype.mjs",
+    "memory:serve": "node scripts/memory-serve.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

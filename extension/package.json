@@ -85,6 +85,10 @@
       {
         "command": "pairCode.applyLayout",
         "title": "Zen: Apply Calm Layout"
+      },
+      {
+        "command": "pairCode.manageMemory",
+        "title": "Zen: Manage Personal Memory"
       }
     ],
     "keybindings": [
@@ -207,6 +211,24 @@
           "type": "boolean",
           "default": true,
           "description": "Index permitted workspace code locally with Turso. Sends code chunks to OpenAI text-embedding-3-small (768 dimensions). Updates in the background; requires context sharing and an OpenAI key."
+        },
+        "pairCode.memoryEnabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Retain useful personal coding preferences and project knowledge locally. Selected recalled context goes to your configured pairing models. Manage, correct or forget with Zen: Manage Personal Memory."
+        },
+        "pairCode.memoryHindsightEnabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Enable background indexing via authenticated local Hindsight. Its configured inference providers receive selected memory content."
+        },
+        "pairCode.memoryEndpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:9077",
+          "scope": "application",
+          "description": "Authenticated local Hindsight endpoint. Only literal 127.0.0.1 HTTP is supported. Configure the token through Manage Personal Memory."
         }
       }
     },

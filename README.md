@@ -45,20 +45,21 @@ Light/dark appearance, host/guest controls and configurable specialist-agent exa
 
 These features are implemented in the prototype; this is not a production-readiness checklist. The development runtime currently targets macOS on Apple Silicon.
 
-| Area                | Available today                                                                                                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Editor              | File navigator, tabs, terminal, Zen Light/Dark syntax themes, quieter chrome, folding workboard with persistent voice controls, and pinned Code-OSS/VSCodium runtime.      |
-| Voice pairing       | Continuous GPT-Live conversation with Groq/Cerebras delegation, mute/disconnect controls, and local session diagnostics.                                                   |
-| Shared context      | Active file, selection, cursor, viewport, unsaved buffers, diagnostics, and recent files.                                                                                  |
-| Human control       | Assistance slider from voice-only guidance to larger code proposals; inline suggestions can be off, on request, or automatic.                                              |
-| Inline edits        | Native proposals with accept/reject, Command+Enter acceptance, undo, and stale-buffer protection.                                                                          |
-| Code pointing       | Spoken explanations can highlight code; Follow Pair controls automatic scrolling.                                                                                          |
-| Project exploration | Isolated read-only researcher, scoped file/text search, batched reads, and language-service references.                                                                    |
-| Semantic retrieval  | Local Turso index, OpenAI small embeddings at 768 dimensions, hybrid search, service/repository filters, incremental updates, and unsaved-buffer handling.                 |
-| Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance.                                        |
-| External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                       |
-| Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap. |
-| Development setup   | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                       |
+| Area                | Available today                                                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor              | File navigator, tabs, terminal, Zen Light/Dark syntax themes, quieter chrome, folding workboard with persistent voice controls, and pinned Code-OSS/VSCodium runtime.                        |
+| Voice pairing       | Continuous GPT-Live conversation with Groq/Cerebras delegation, mute/disconnect controls, and local session diagnostics.                                                                     |
+| Shared context      | Active file, selection, cursor, viewport, unsaved buffers, diagnostics, and recent files.                                                                                                    |
+| Human control       | Assistance slider from voice-only guidance to larger code proposals; inline suggestions can be off, on request, or automatic.                                                                |
+| Inline edits        | Native proposals with accept/reject, Command+Enter acceptance, undo, and stale-buffer protection.                                                                                            |
+| Code pointing       | Spoken explanations can highlight code; Follow Pair controls automatic scrolling.                                                                                                            |
+| Project exploration | Isolated read-only researcher, scoped file/text search, batched reads, and language-service references.                                                                                      |
+| Semantic retrieval  | Local Turso index, OpenAI small embeddings at 768 dimensions, hybrid search, service/repository filters, incremental updates, and unsaved-buffer handling.                                   |
+| Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance.                                                          |
+| External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                                         |
+| Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap.                   |
+| Personal memory     | Automatic backend retention, private inspect/correct/forget/pause controls, source freshness checks and optional authenticated local Hindsight. [Setup and limits](docs/personal-memory.md). |
+| Development setup   | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                                         |
 
 ## Roadmap
 
@@ -78,12 +79,12 @@ Acceptance: explain → edit → verify on an existing service at voice-only and
 
 ### Core: automatic personal memory
 
-- [ ] Pilot Hindsight behind a supervised local adapter for the computer owner. No memory service is implemented or enabled yet; no Memory tab or shared memory bank is needed.
-- [ ] Remember explicit preferences and corrections: coding style, conventions, favored approaches, desired assistance and explanation detail. Distinguish personal defaults from repository/service-specific rules.
-- [ ] Maintain repository/service knowledge: structure, responsibilities, entrypoints, dependencies and architectural decisions, with source references and revision-aware freshness checks. Current code wins over stale recollections.
-- [ ] Adapt to what the user says they know or want explained. Treat inferred familiarity as tentative and topic-specific; asking a question does not establish a permanent skill level.
+- [ ] Add automatic supervision and quality/cost evaluation to the implemented local Hindsight adapter and developer launcher. Hindsight is optional and off until connected; local retention/recall is available now.
+- [x] Retain explicit preferences and corrections through backend tools: coding style, conventions, favored approaches, desired assistance and explanation detail. Distinguish personal defaults from repository/service-specific rules.
+- [x] Retain source-backed repository/service summaries: structure, responsibilities, entrypoints, dependencies and architectural decisions, with source references and revision-aware freshness checks. Current code wins over stale recollections.
+- [ ] Evaluate adaptation to stated topic familiarity in real voice sessions. Retention is implemented; automatic inference of skill level is not.
 - [ ] Resume individual pairing sessions with a compact checkpoint of decisions, verified work, open questions and the next step. No issue tracker or project board dependency; never automatically restart the microphone.
-- [ ] Provide inspect/correct/forget/disable controls in private Settings/commands. Retention and consolidation run off the voice path; pairing remains useful while memory is unavailable.
+- [x] Provide inspect/correct/forget/pause controls in private Settings/commands. Background indexing runs off the voice path; pairing remains useful while memory is unavailable.
 
 Acceptance: relevant recall after restarting; explicit corrections supersede earlier assumptions; repository boundaries and code freshness are respected; deleted evidence is not immediately relearned; memory improves explanations without slowing or cluttering the conversation. Measure quality, latency, resource use and cost. Local storage does not imply local inference: verify and disclose processing destinations when implementing the adapter. See [the memory design](docs/local-memory-and-shared-tasks.md).
 
@@ -106,7 +107,7 @@ Native themes, reduced chrome, folding and persistent voice controls are impleme
 
 These ideas remain documented for future consideration. Do not build them as dependencies of voice, personal memory or UI work unless explicitly reprioritized.
 
-This is a local development foundation using the pinned Code-OSS native inline-edit renderer and proposed API. It is not yet a signed production editor. The sidebar shows voice controls, settings, and sources from web research; conversation transcripts and backend summaries stay in the local session trace, available through **Open session trace**. Durable project knowledge, service dependency catalogs, command/test execution, remote development, MCP integrations, and concurrent-edit rebasing are future work. Language-service references provide local impact evidence; they do not establish complete cross-service coverage.
+This is a local development foundation using the pinned Code-OSS native inline-edit renderer and proposed API. It is not yet a signed production editor. The sidebar shows voice controls, settings, and sources from web research; conversation transcripts and backend summaries stay in the local session trace, available through **Open session trace**. Complete service dependency catalogs, command/test execution, remote development, MCP integrations, and concurrent-edit rebasing are future work. Language-service references provide local impact evidence; they do not establish complete cross-service coverage.
 
 Cerebras, Firecrawl, and a synthetic-audio GPT-Live → Cerebras → spoken-response session have passed live checks on this machine. Groq has not been live-tested. Real microphone/echo behavior, natural interruptions, and the subjective pairing feel still need a human session; see the validation record in [Live behavior](docs/live-behavior.md).
 
