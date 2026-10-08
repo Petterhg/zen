@@ -9,6 +9,8 @@ import type {
   IndexService,
   IndexStatus,
 } from "../extension/src/index-service.js";
+import { startSharedIndexServer } from "../extension/src/shared-index-server.js";
+import { openAIEmbed } from "../extension/src/embeddings.js";
 const requireNative = createRequire(import.meta.url);
 const bundled = await build({
   entryPoints: [
@@ -74,6 +76,7 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   const previous = globalThis.fetch;
   globalThis.fetch = (async (_url, init) => {
     requests++;
+    await new Promise((r) => setTimeout(r, 80));
     const body = JSON.parse(String(init?.body));
     assert.doesNotMatch(JSON.stringify(body), /SECRET_MARKER/);
     return Response.json({
@@ -87,6 +90,27 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   }) as typeof fetch;
   t.after(() => {
     globalThis.fetch = previous;
+  });
+  const central = await mkdtemp(path.join(tmpdir(), "zen-shared-service-"));
+  let daemon: Awaited<ReturnType<typeof startSharedIndexServer>> | undefined;
+  const shared = {
+    directory: central,
+    start: async () => {
+      daemon = await startSharedIndexServer(central, {
+        grammars: path.resolve(
+          import.meta.dirname,
+          "../extension/dist/grammars",
+        ),
+        embed: openAIEmbed(async () => "fake"),
+        idleMs: 60000,
+      });
+    },
+  };
+  const clients: IndexService[] = [];
+  t.after(async () => {
+    for (const client of clients) await client.dispose();
+    await daemon?.close();
+    await rm(central, { recursive: true, force: true });
   });
   const mod: { exports: { IndexService?: typeof IndexService } } = {
     exports: {},
@@ -105,7 +129,9 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
     async () => "fake",
     () => enabled,
     (status) => statuses.push({ ...status }),
+    shared,
   );
+  clients.push(service);
   t.after(() => service.dispose());
   const ready = async () => {
     const deadline = Date.now() + 10000;
@@ -128,11 +154,22 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
     async () => "fake",
     () => enabled,
     () => {},
+    shared,
   );
+  clients.push(contender);
   t.after(() => contender.dispose());
   await new Promise((r) => setTimeout(r, 1600));
-  assert.equal(contender.status.state, "waiting");
-  assert.equal(contender.status.coverageKnown, false);
+  assert.equal(contender.status.state, "ready");
+  assert.equal(contender.status.coverageKnown, true);
+  assert.equal(contender.status.files, 1);
+  assert.ok(
+    (
+      (await contender.search(
+        { query: "authorize" },
+        new AbortController().signal,
+      )) as { matches: unknown[] }
+    ).matches.length > 0,
+  );
   await contender.dispose();
 
   assert.equal(service.status.files, 1);
@@ -196,18 +233,22 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
     async () => "fake",
     () => enabled,
     () => {},
+    shared,
   );
+  clients.push(waiting);
   t.after(() => waiting.dispose());
   await new Promise((r) => setTimeout(r, 1600));
-  assert.equal(waiting.status.state, "waiting");
+  assert.equal(waiting.status.state, "ready");
+  await daemon!.close();
   await service.dispose();
+  await new Promise((r) => setTimeout(r, 150));
   const retryDeadline = Date.now() + 13000;
   while (String(waiting.status.state) !== "ready" && Date.now() < retryDeadline)
     await new Promise((r) => setTimeout(r, 100));
   assert.equal(
     waiting.status.state,
     "ready",
-    "a waiting window automatically takes ownership after release",
+    "a connected window automatically restarts the shared owner after it exits",
   );
   assert.equal(waiting.status.coverageKnown, true);
   await waiting.dispose();

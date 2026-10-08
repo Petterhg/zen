@@ -159,8 +159,8 @@ try {
   await page.evaluate(() =>
     window.host({
       type: "indexStatus",
-      state: "waiting",
-      error: "Owned by process 123",
+      state: "connecting",
+      shared: true,
       files: 0,
     }),
   );

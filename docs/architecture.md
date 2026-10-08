@@ -47,4 +47,18 @@ Measure time to first useful spoken answer, delegation latency, edit accuracy, i
 
 ## Retrieval latency
 
-Workspace text lookup uses native ripgrep with current unsaved-buffer overlays. Batch reads gather up to eight known ranges with bounded I/O concurrency. The explorer has a separate conversation and returns bounded findings and file/line metadata. Session research briefs let later questions reuse those findings without retaining the child's full conversation or source bodies. Their current versions must be verified before edits. The [retrieval roadmap](retrieval-roadmap.md) describes the proposed local hybrid index and optional parallel research workers; these remain separate future stages.
+Workspace text lookup uses native ripgrep with current unsaved-buffer overlays. Batch reads gather up to eight known ranges with bounded I/O concurrency. The explorer has a separate conversation and returns bounded findings and file/line metadata. Session research briefs let later questions reuse those findings without retaining the child's full conversation or source bodies. Their current versions must be verified before edits. The [retrieval roadmap](retrieval-roadmap.md) records the original hybrid-index design and proposed parallel research workers. The shared local index is implemented; parallel research remains a separate future stage.
+
+## Shared local retrieval
+
+The extension is a client of a background index owner. `IndexService` handles trusted root registration and fresh dirty-buffer overlays. `shared-index-client.ts` launches/connects to `dist/shared-index-daemon.cjs`; the daemon authenticates each connection, owns Turso once, and coordinates incremental saved-source scans. `shared-index-protocol.ts` owns the storage namespace and framed transport. `index-migration.ts` retires only the legacy index caches. Read [the behavior contract](live-behavior.md#shared-computer-index) for ownership, query filters, privacy and recovery.
+
+```mermaid
+flowchart LR
+  A[Zen window A] --> S[Authenticated local index service]
+  B[Zen window B] --> S
+  S --> D[One per-user Turso database]
+  S --> R[Registered saved-source roots]
+  A --> U[Window A unsaved-buffer overlay]
+  B --> V[Window B unsaved-buffer overlay]
+```

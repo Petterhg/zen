@@ -2,26 +2,23 @@ import * as vscode from "vscode";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { CodeIndex, IndexBusyError, type IndexHit } from "./code-index.js";
+import { type IndexHit } from "./code-index.js";
 import { CodeChunker, digest } from "./code-chunks.js";
 import { openAIEmbed, type Embed } from "./embeddings.js";
 import { WorkspaceDiscovery, type DiscoveryRoot } from "./discovery.js";
 import type { BackendTool } from "./backend.js";
 import { voiceContent } from "./live-protocol.js";
-const eligible = (f: string) =>
-  /\.(py|pyi|ts|tsx|js|jsx|mjs|cjs|go|rs|java|kt|c|h|cpp|cs|rb|php|swift|sql|tf|hcl|yaml|yml|json|toml|md|mdx|sh|txt)$/.test(
-    f,
-  ) &&
-  !/(?:^|\/)(?:package-lock\.json|yarn\.lock|poetry\.lock)|\.min\.[jt]s$|\.d\.ts$/.test(
-    f,
-  );
+import { SharedIndexClient } from "./shared-index-client.js";
+import { type RootStatus } from "./shared-index-protocol.js";
+import { indexEligible as eligible } from "./shared-index-coordinator.js";
+import { retireLegacyIndexes } from "./index-migration.js";
 const policyFile = (f: string) =>
-  /(?:^|[\\/])(?:\.gitignore|\.pairignore|\.ignore|HEAD|index|exclude|package\.json|pyproject\.toml|Cargo\.toml)$/.test(
+  /(?:^|[\\/])(?:\.gitignore|\.pairignore|\.ignore|HEAD|index|exclude|package\.json|pyproject\.toml|Cargo\.toml|go\.mod)$/.test(
     f,
   );
 interface RootIndex {
   root: DiscoveryRoot;
-  index: Promise<CodeIndex>;
+  checkout: string;
   packages: Set<string>;
 }
 export interface IndexStatus {
@@ -37,8 +34,10 @@ export interface IndexStatus {
   repository?: string;
   currentFile?: string;
   updatedAt?: number;
+  shared?: boolean;
+  migrationDeferred?: boolean;
 }
-/** Coordinates background indexing only. Retrieval never waits for a complete repository scan. */
+/** Window-local policy and dirty-buffer overlays; the daemon owns saved indexing. */
 export class IndexService implements vscode.Disposable {
   private roots = new Map<string, RootIndex>();
   private pending = new Set<string>();
@@ -50,17 +49,41 @@ export class IndexService implements vscode.Disposable {
   private embed: Embed;
   private chunker: CodeChunker;
   private queryCache = new Map<string, number[]>();
-  status: IndexStatus = { state: "starting", files: 0, embedded: 0, reused: 0 };
+  private client: SharedIndexClient;
+  private disposed = false;
+  status: IndexStatus = {
+    state: "starting",
+    files: 0,
+    embedded: 0,
+    reused: 0,
+    shared: true,
+  };
   constructor(
     private context: vscode.ExtensionContext,
-    key: () => Promise<string | undefined>,
+    private key: () => Promise<string | undefined>,
     private enabled: () => boolean,
     private changed: (status: IndexStatus) => void,
+    options: { directory?: string; start?: () => Promise<void> } = {},
   ) {
     this.embed = openAIEmbed(key);
     this.chunker = new CodeChunker(
       path.join(context.extensionPath, "dist/grammars"),
     );
+    this.client = new SharedIndexClient({
+      directory: options.directory,
+      daemonPath: path.join(
+        context.extensionPath,
+        "dist/shared-index-daemon.cjs",
+      ),
+      start: options.start,
+      changed: (roots) => this.receiveStatus(roots),
+      disconnected: () => {
+        if (!this.disposed) {
+          this.status.coverageKnown = false;
+          this.publish("connecting");
+        }
+      },
+    });
     const watcher = vscode.workspace.createFileSystemWatcher("**/*");
     const event = (uri: vscode.Uri) => {
       if (
@@ -74,7 +97,6 @@ export class IndexService implements vscode.Disposable {
       watcher.onDidCreate(event),
       watcher.onDidChange(event),
       watcher.onDidDelete(event),
-      vscode.workspace.onDidChangeTextDocument((e) => event(e.document.uri)),
       vscode.workspace.onDidCloseTextDocument((d) => event(d.uri)),
       vscode.workspace.onDidSaveTextDocument((d) => event(d.uri)),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.refresh()),
@@ -92,104 +114,160 @@ export class IndexService implements vscode.Disposable {
     this.status = { ...this.status, state, error, updatedAt: Date.now() };
     this.changed(this.status);
   }
+  private receiveStatus(roots: RootStatus[]) {
+    if (this.disposed || !this.enabled() || !vscode.workspace.isTrusted) return;
+    const allowed = roots.filter((r) => this.roots.has(r.checkout));
+    if (!allowed.length) return;
+    const active =
+      allowed.find((r) =>
+        ["scanning", "indexing", "updating", "starting"].includes(r.state),
+      ) ??
+      allowed.find((r) => r.state === "error") ??
+      allowed[0];
+    this.status = {
+      ...this.status,
+      shared: true,
+      files: allowed.reduce((n, r) => n + r.files, 0),
+      chunks: allowed.reduce((n, r) => n + r.chunks, 0),
+      coverageKnown: allowed.every((r) => r.coverageKnown),
+      embedded: allowed.reduce((n, r) => n + r.embedded, 0),
+      reused: allowed.reduce((n, r) => n + r.reused, 0),
+      processed: active.processed,
+      total: active.total,
+      repository: active.repository,
+      currentFile: active.currentFile,
+    };
+    this.publish(active.state, active.error);
+  }
   private guard() {
     if (!this.enabled() || !vscode.workspace.isTrusted)
       throw new Error("Code indexing/context sharing is disabled.");
   }
-  private discovery(root: DiscoveryRoot) {
-    const rg = path.join(
+  private rg() {
+    const binary = path.join(
       vscode.env.appRoot,
       "node_modules.asar.unpacked/@vscode/ripgrep-universal/bin",
       `${process.platform}-${process.arch}`,
       process.platform === "win32" ? "rg.exe" : "rg",
     );
-    return new WorkspaceDiscovery([root], existsSync(rg) ? rg : "rg");
+    return existsSync(binary) ? binary : "rg";
+  }
+  private discovery(root: DiscoveryRoot) {
+    return new WorkspaceDiscovery([root], this.rg());
   }
   private schedule(file?: string, full = false) {
+    if (this.disposed) return;
     if (file) this.pending.add(file);
     this.full ||= full;
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.start(), 1300);
+    this.timer = setTimeout(() => this.start(), 300);
   }
-  refresh(): void {
+  refresh() {
     this.lifetime.abort();
     this.lifetime = new AbortController();
     this.queryCache.clear();
+    this.full = true;
+    if (!this.enabled() || !vscode.workspace.isTrusted) {
+      void this.client.register([], "", this.rg()).catch(() => {});
+      this.roots.clear();
+      this.publish(!this.enabled() ? "paused" : "untrusted");
+      return;
+    }
     this.schedule(undefined, true);
-    if (!this.enabled()) this.publish("paused");
   }
   private start() {
-    if (this.job || !this.enabled() || !vscode.workspace.isTrusted) {
-      if (!this.enabled()) this.publish("paused");
-      else if (!vscode.workspace.isTrusted) this.publish("untrusted");
+    if (this.disposed || this.job) return;
+    if (!this.enabled() || !vscode.workspace.isTrusted) {
+      this.publish(!this.enabled() ? "paused" : "untrusted");
       return;
     }
     const signal = this.lifetime.signal;
-    this.job = this.run(signal)
+    this.job = this.sync(signal)
       .catch((e) => {
-        if (!signal.aborted) {
-          if (e instanceof IndexBusyError) {
-            this.full = true;
-            this.status.coverageKnown = false;
-            this.publish("waiting", e.message);
-            return;
-          }
-          this.full = false;
-          this.pending.clear();
+        if (!signal.aborted)
           this.publish(
             "error",
-            e instanceof Error ? e.message : "Code indexing failed.",
+            e instanceof Error ? e.message : "Shared index failed.",
           );
-        }
       })
       .finally(() => {
         this.job = undefined;
-        if (!this.lifetime.signal.aborted && this.status.state === "waiting") {
-          clearTimeout(this.timer);
-          this.timer = setTimeout(() => this.start(), 10000);
-          return;
-        }
-        if (!this.lifetime.signal.aborted && (this.full || this.pending.size))
-          this.schedule();
+        if (!this.disposed && (this.full || this.pending.size)) this.schedule();
       });
   }
-  private async initialize() {
-    const folders = (vscode.workspace.workspaceFolders ?? []).filter(
-      (f) => f.uri.scheme === "file",
-    );
-    for (const [root, entry] of this.roots)
-      if (!folders.some((f) => f.uri.fsPath === root)) {
-        await (await entry.index).close();
-        this.roots.delete(root);
+  private async sync(signal: AbortSignal) {
+    this.guard();
+    signal.throwIfAborted();
+    if (this.full || !this.roots.size) {
+      this.full = false;
+      this.publish("connecting");
+      const migration = await retireLegacyIndexes(
+        this.context.globalStorageUri.fsPath,
+      );
+      this.status.migrationDeferred = migration.deferred;
+      const folders = (vscode.workspace.workspaceFolders ?? []).filter(
+        (f) => f.uri.scheme === "file",
+      );
+      const key = await this.key();
+      signal.throwIfAborted();
+      this.guard();
+      const registered = await this.client.register(
+        folders.map((f) => ({ name: f.name, path: f.uri.fsPath })),
+        key ?? "",
+        this.rg(),
+      );
+      if (signal.aborted || !this.enabled() || !vscode.workspace.isTrusted) {
+        await this.client.register([], "", this.rg());
+        signal.throwIfAborted();
+        this.guard();
       }
-    for (const f of folders)
-      if (!this.roots.has(f.uri.fsPath)) {
-        const root = { name: f.name, path: f.uri.fsPath };
-        const index = CodeIndex.open(
-          path.join(
-            this.context.globalStorageUri.fsPath,
-            "indexes",
-            digest(root.path),
-          ),
-          this.embed,
-          this.chunker,
+      this.roots.clear();
+      for (let i = 0; i < registered.length; i++) {
+        const root = registered[i];
+        this.roots.set(root.checkout, {
+          root: { name: root.name, path: folders[i].uri.fsPath },
+          checkout: root.checkout,
+          packages: new Set(),
+        });
+      }
+    }
+    for (const file of [...this.pending]) {
+      this.pending.delete(file);
+      const entry = this.rootFor(file);
+      if (entry)
+        await this.client.refresh(
+          entry.checkout,
+          path.relative(entry.root.path, file).split(path.sep).join("/"),
+          policyFile(file),
         );
-        this.roots.set(root.path, { root, index, packages: new Set() });
-        try {
-          await index;
-        } catch (e) {
-          this.roots.delete(root.path);
-          throw e;
-        }
-      }
+    }
+    const result = await this.client.status();
+    this.guard();
+    signal.throwIfAborted();
+    for (const scope of result.scopes) {
+      const entry = this.roots.get(scope.checkout);
+      if (entry) entry.packages = new Set(scope.services);
+    }
+    if (!result.roots.length) {
+      this.status = {
+        ...this.status,
+        files: 0,
+        chunks: 0,
+        coverageKnown: true,
+      };
+      this.publish("ready");
+    } else this.receiveStatus(result.roots);
   }
-  private service(entry: RootIndex, file: string): string {
+  private service(entry: RootIndex, file: string) {
     const rel = path.relative(entry.root.path, file).split(path.sep).join("/");
-    const conventional = /^(?:services|packages|apps)\/[^/]+/.exec(rel)?.[0];
     const candidates = [...entry.packages]
       .filter((p) => p !== "." && (rel === p || rel.startsWith(p + "/")))
       .sort((a, b) => b.length - a.length);
-    return candidates[0] ?? conventional ?? ".";
+    return (
+      candidates[0] ??
+      /^(?:services|packages|apps)\/[^/]+/.exec(rel)?.[0] ??
+      "."
+    );
   }
   private async source(
     entry: RootIndex,
@@ -215,51 +293,6 @@ export class IndexService implements vscode.Disposable {
       return undefined;
     return text;
   }
-  private async update(entry: RootIndex, file: string, signal: AbortSignal) {
-    signal.throwIfAborted();
-    const index = await entry.index;
-    const relative = path
-      .relative(entry.root.path, file)
-      .split(path.sep)
-      .join("/");
-    this.status.currentFile = relative;
-    this.status.repository = entry.root.name;
-    this.publish(this.status.state);
-    let text: string | undefined;
-    try {
-      text = await this.source(entry, file, signal);
-    } catch {
-      signal.throwIfAborted();
-      this.guard();
-      await index.remove(relative);
-      return;
-    }
-    if (text === undefined) {
-      await index.remove(relative);
-      return;
-    }
-    const hash = digest(text);
-    const result = await index.update(
-      {
-        path: relative,
-        text,
-        service: this.service(entry, file),
-        language: path.extname(file).slice(1),
-      },
-      signal,
-      async () => {
-        try {
-          const latest = await this.source(entry, file, signal);
-          return latest !== undefined && digest(latest) === hash;
-        } catch {
-          return false;
-        }
-      },
-    );
-    this.status.embedded += result.embedded;
-    this.status.reused += result.reused;
-    if (result.stale) this.pending.add(file);
-  }
   private rootFor(file: string) {
     return [...this.roots.values()]
       .filter((e) => {
@@ -270,103 +303,20 @@ export class IndexService implements vscode.Disposable {
       })
       .sort((a, b) => b.root.path.length - a.root.path.length)[0];
   }
-  private async drain(signal: AbortSignal) {
-    for (const file of [...this.pending].slice(0, 16)) {
-      this.pending.delete(file);
-      const entry = this.rootFor(file);
-      if (entry) await this.update(entry, file, signal);
-    }
-  }
-  private async run(signal: AbortSignal) {
-    this.guard();
-    await this.initialize();
-    signal.throwIfAborted();
-    this.status = {
-      ...this.status,
-      processed: 0,
-      total: undefined,
-      currentFile: undefined,
-      repository: undefined,
-      embedded: 0,
-      reused: 0,
-    };
-    const full = this.full;
-    this.publish(full ? "scanning" : "updating");
-    this.full = false;
-    if (full)
-      for (const entry of this.roots.values()) {
-        this.status.repository = entry.root.name;
-        this.status.processed = 0;
-        this.status.total = undefined;
-        this.status.currentFile = undefined;
-        this.publish("scanning");
-        const discovered = new Set<string>();
-        entry.packages.clear();
-        for await (const file of this.discovery(entry.root).walk(signal)) {
-          if (
-            /\/(package\.json|pyproject\.toml|Cargo\.toml|go\.mod)$/.test(file)
-          )
-            entry.packages.add(
-              path
-                .relative(entry.root.path, path.dirname(file))
-                .split(path.sep)
-                .join("/") || ".",
-            );
-          if (eligible(file)) discovered.add(file);
-        }
-        const index = await entry.index;
-        for (const previous of await index.paths())
-          if (!discovered.has(path.join(entry.root.path, previous)))
-            await index.remove(previous);
-        const active = vscode.window.activeTextEditor?.document.uri.fsPath;
-        const files = [...discovered].sort(
-          (a, b) => Number(b === active) - Number(a === active),
-        );
-        this.status.total = files.length;
-        this.publish("indexing");
-        let done = 0;
-        for (const file of files) {
-          signal.throwIfAborted();
-          await this.drain(signal);
-          await this.update(entry, file, signal);
-          this.status.processed = ++done;
-          this.publish("indexing");
-          await new Promise<void>((resolve) => setImmediate(resolve));
-        }
-        await index.pruneCache();
-      }
-    if (this.pending.size) {
-      this.status.total = undefined;
-      this.publish("updating");
-    }
-    while (this.pending.size) {
-      signal.throwIfAborted();
-      await this.drain(signal);
-    }
-    this.status.files = 0;
-    this.status.chunks = 0;
-    for (const entry of this.roots.values()) {
-      const totals = await (await entry.index).stats();
-      this.status.files += totals.files;
-      this.status.chunks += totals.chunks;
-    }
-    this.status.coverageKnown = true;
-    this.status.currentFile = undefined;
-    this.publish("ready");
-  }
   tools(): BackendTool[] {
     const string = { type: "string" };
     return [
       {
         name: "search_code",
         description:
-          "Search local indexed code by meaning plus exact words. Filters repository (workspace root name), service (relative directory e.g. services/copilot), directory scope, and language (extension e.g. py). Defaults across open repositories; explicitly broaden service for caller/impact questions. Results include parent ranges and fresh source hashes. Index coverage may be incomplete; use search_text/read_files/symbol_usages for verification. Does not search the web.",
+          "Search local indexed code by meaning plus exact words. Filters checkout (canonical absolute root path), repository (workspace root name), service (relative directory e.g. services/copilot), directory scope, and language (extension e.g. py). Defaults across open repositories; explicitly broaden service for caller/impact questions. Results include parent ranges and fresh source hashes. Index coverage may be incomplete; use search_text/read_files/symbol_usages for verification. Does not search the web.",
         parameters: {
           type: "object",
           additionalProperties: false,
           properties: {
             query: string,
             repository: string,
+            checkout: string,
             service: string,
             scope: string,
             language: string,
@@ -389,13 +339,13 @@ export class IndexService implements vscode.Disposable {
           this.guard();
           return {
             ...this.status,
-            repositories: await Promise.all(
-              [...this.roots.values()].map(async (e) => ({
-                repository: e.root.name,
-                files: (await (await e.index).paths()).length,
-                services: await (await e.index).services(),
-              })),
-            ),
+            repositories: (await this.client.status()).scopes.map((scope) => ({
+              repository: scope.name,
+              checkout: scope.checkout,
+              files: scope.files,
+              chunks: scope.chunks,
+              services: scope.services,
+            })),
             coverage:
               "Only permitted text sources; ignored/generated/oversized files are excluded. Semantic matches are not exhaustive callers.",
           };
@@ -413,7 +363,13 @@ export class IndexService implements vscode.Disposable {
     const query = typeof args.query === "string" ? args.query.trim() : "";
     if (!query || query.length > 1500)
       throw new Error("Provide a code search question up to 1500 characters.");
-    for (const name of ["repository", "service", "scope", "language"])
+    for (const name of [
+      "repository",
+      "checkout",
+      "service",
+      "scope",
+      "language",
+    ])
       if (
         args[name] !== undefined &&
         (typeof args[name] !== "string" || String(args[name]).length > 2000)
@@ -439,6 +395,7 @@ export class IndexService implements vscode.Disposable {
     const entries = [...this.roots.values()].filter(
       (e) =>
         (!args.repository || e.root.name === args.repository) &&
+        (!args.checkout || e.checkout === args.checkout) &&
         (!scopedRoot || e === scopedRoot),
     );
     if (!entries.length)
@@ -458,7 +415,13 @@ export class IndexService implements vscode.Disposable {
     }
     const hits: { entry: RootIndex; hit: IndexHit }[] = [];
     for (const entry of entries) {
-      const rows = await (await entry.index).search(query, vector, filter, 40);
+      const rows = await this.client.search(
+        entry.checkout,
+        query,
+        vector,
+        filter,
+        s,
+      );
       for (const hit of rows) hits.push({ entry, hit });
     }
     hits.sort((a, b) => (b.hit.score ?? 0) - (a.hit.score ?? 0));
@@ -485,8 +448,9 @@ export class IndexService implements vscode.Disposable {
         continue;
       }
       matches.push({
-        repository: entry.root.name,
         ...hit,
+        repository: entry.root.name,
+        checkout: entry.checkout,
         text: voiceContent(hit.text, 1600),
         id: undefined,
         distance: undefined,
@@ -544,6 +508,7 @@ export class IndexService implements vscode.Disposable {
       for (const { c } of selected)
         matches.unshift({
           repository: entry.root.name,
+          checkout: entry.checkout,
           path:
             this.roots.size > 1 ? entry.root.name + "/" + relative : relative,
           ...c,
@@ -558,8 +523,8 @@ export class IndexService implements vscode.Disposable {
     s.throwIfAborted();
     const unique = new Map<string, unknown>();
     for (const match of matches) {
-      const m = match as { path: string; startLine: number };
-      const k = m.path + ":" + m.startLine;
+      const m = match as { checkout: string; path: string; startLine: number };
+      const k = m.checkout + ":" + m.path + ":" + m.startLine;
       if (!unique.has(k)) unique.set(k, match);
     }
     return {
@@ -571,16 +536,13 @@ export class IndexService implements vscode.Disposable {
     };
   }
   async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
     clearTimeout(this.timer);
     this.lifetime.abort();
     this.disposables.forEach((d) => d.dispose());
+    this.client.close();
     await this.job;
-    for (const e of this.roots.values())
-      try {
-        await (await e.index).close();
-      } catch {
-        /* Already reported by index status. */
-      }
     this.roots.clear();
   }
 }

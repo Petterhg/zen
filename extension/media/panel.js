@@ -605,11 +605,16 @@
     }
     if (data.type === "transcript") renderTranscript(data.entries);
     if (data.type === "indexStatus") {
-      const active = ["starting", "scanning", "indexing", "updating"].includes(
-        data.state,
-      );
+      const active = [
+        "starting",
+        "connecting",
+        "scanning",
+        "indexing",
+        "updating",
+      ].includes(data.state);
       const label = {
-        starting: "Code index starting…",
+        starting: "Shared code index starting…",
+        connecting: "Connecting to shared code index…",
         scanning: "Scanning repository…",
         indexing: `Indexing · ${data.processed ?? 0} / ${data.total ?? "?"} files checked`,
         updating: "Updating changed files…",
@@ -617,7 +622,6 @@
         paused: "Code index paused",
         untrusted: "Code index waiting for workspace trust",
         error: "Code index needs attention",
-        waiting: "Index in use · retrying automatically",
       };
       $("indexStatus").textContent =
         label[data.state] || `Code index ${data.state}`;
@@ -630,12 +634,15 @@
       $("indexDetail").textContent =
         data.state === "paused"
           ? "Enable Code Index and Share Editor Context in settings to resume."
-          : data.state === "waiting"
-            ? `${data.error} Retrying every 10 seconds. Stored totals are unavailable in this window.`
+          : data.state === "connecting"
+            ? "One shared index on this computer. Connecting or recovering the local service; totals are unavailable until it responds."
             : data.state === "untrusted"
               ? "Trust this workspace to enable indexing."
               : [
+                  data.shared && "Shared on this computer",
                   data.repository,
+                  data.migrationDeferred &&
+                    "Old index cleanup will finish after older Zen windows close",
                   active && data.currentFile,
                   data.coverageKnown &&
                     `${data.files} files · ${data.chunks} chunks stored`,
@@ -646,16 +653,12 @@
                 ]
                   .filter(Boolean)
                   .join(" · ");
-      $("indexError").textContent =
-        data.error && data.state !== "waiting"
-          ? `${data.error} Fix the cause, then press ↻ to retry.`
-          : "";
-      $("indexError").classList.toggle(
-        "hidden",
-        !data.error || data.state === "waiting",
-      );
+      $("indexError").textContent = data.error
+        ? `${data.error} Fix the cause, then press ↻ to retry.`
+        : "";
+      $("indexError").classList.toggle("hidden", !data.error);
       $("indexStatus").title =
-        "Local Turso · OpenAI small / 768. Files checked includes unchanged or excluded candidates; ready shows indexed files.";
+        "Shared local Turso · OpenAI small / 768. Totals cover this window’s registered checkouts; files checked includes unchanged or excluded candidates.";
     }
     if (data.type === "rpcResult") {
       const entry = pending.get(data.id);

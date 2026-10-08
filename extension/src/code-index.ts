@@ -4,12 +4,16 @@ import path from "node:path";
 import { CodeChunker, digest, INDEX_VERSION } from "./code-chunks.js";
 import { EMBEDDING_DIMENSIONS, type Embed } from "./embeddings.js";
 export interface IndexedFile {
+  checkout?: string;
+  repository?: string;
   path: string;
   text: string;
   service: string;
   language: string;
 }
 export interface IndexHit {
+  checkout?: string;
+  repository?: string;
   id: string;
   path: string;
   service: string;
@@ -26,6 +30,8 @@ export interface IndexHit {
   score?: number;
 }
 export interface IndexFilter {
+  checkout?: string;
+  repository?: string;
   service?: string;
   scope?: string;
   language?: string;
@@ -43,7 +49,7 @@ export class CodeIndex {
   private queue: Promise<unknown> = Promise.resolve();
   private constructor(
     private db: Database,
-    private lock: string,
+    private lock: string | undefined,
     private embed: Embed,
     private chunker: CodeChunker,
   ) {}
@@ -51,44 +57,47 @@ export class CodeIndex {
     directory: string,
     embed: Embed,
     chunker: CodeChunker,
+    kernelOwned = false,
   ): Promise<CodeIndex> {
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    const lock = path.join(directory, "owner.lock");
-    try {
-      await mkdir(lock);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      let alive = true;
-      let ownerPid: number | undefined;
+    const lock = kernelOwned ? undefined : path.join(directory, "owner.lock");
+    if (lock) {
       try {
-        const pid = Number(await readFile(path.join(lock, "pid"), "utf8"));
-        if (!Number.isInteger(pid) || pid < 1)
-          throw new Error("Invalid index lock.");
-        ownerPid = pid;
-        process.kill(pid, 0);
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code === "ESRCH") alive = false;
+        await mkdir(lock);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        let alive = true;
+        let ownerPid: number | undefined;
+        try {
+          const pid = Number(await readFile(path.join(lock, "pid"), "utf8"));
+          if (!Number.isInteger(pid) || pid < 1)
+            throw new Error("Invalid index lock.");
+          ownerPid = pid;
+          process.kill(pid, 0);
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === "ESRCH") alive = false;
+        }
+        if (alive) throw new IndexBusyError(ownerPid);
+        await rm(lock, { recursive: true, force: true });
+        await mkdir(lock);
       }
-      if (alive) throw new IndexBusyError(ownerPid);
-      await rm(lock, { recursive: true, force: true });
-      await mkdir(lock);
+      await writeFile(path.join(lock, "pid"), String(process.pid), {
+        mode: 0o600,
+      });
     }
-    await writeFile(path.join(lock, "pid"), String(process.pid), {
-      mode: 0o600,
-    });
     let db: Database | undefined;
     try {
       const { connect } = await import("@tursodatabase/database");
-      db = await connect(path.join(directory, `${INDEX_VERSION}.db`));
-      await db.exec(`CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, hash TEXT NOT NULL, service TEXT NOT NULL, language TEXT NOT NULL);
+      db = await connect(path.join(directory, `shared2-${INDEX_VERSION}.db`));
+      await db.exec(`CREATE TABLE IF NOT EXISTS files(checkout TEXT NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL, service TEXT NOT NULL, language TEXT NOT NULL, repository TEXT NOT NULL, PRIMARY KEY(checkout,path));
         CREATE TABLE IF NOT EXISTS embeddings(hash TEXT PRIMARY KEY, vector BLOB NOT NULL);
-        CREATE TABLE IF NOT EXISTS chunks(id TEXT PRIMARY KEY, path TEXT NOT NULL, service TEXT NOT NULL, language TEXT NOT NULL, symbol TEXT NOT NULL, kind TEXT NOT NULL, startLine INTEGER NOT NULL, endLine INTEGER NOT NULL, parentStart INTEGER NOT NULL, parentEnd INTEGER NOT NULL, text TEXT NOT NULL, hash TEXT NOT NULL, embedding BLOB NOT NULL);
-        CREATE INDEX IF NOT EXISTS chunk_scope ON chunks(service,path);
-        CREATE INDEX IF NOT EXISTS chunk_path ON chunks(path);`);
+        CREATE TABLE IF NOT EXISTS chunks(id TEXT PRIMARY KEY, checkout TEXT NOT NULL, repository TEXT NOT NULL, path TEXT NOT NULL, service TEXT NOT NULL, language TEXT NOT NULL, symbol TEXT NOT NULL, kind TEXT NOT NULL, startLine INTEGER NOT NULL, endLine INTEGER NOT NULL, parentStart INTEGER NOT NULL, parentEnd INTEGER NOT NULL, text TEXT NOT NULL, hash TEXT NOT NULL, embedding BLOB NOT NULL);
+        CREATE INDEX IF NOT EXISTS chunk_scope ON chunks(checkout,service,path);
+        CREATE INDEX IF NOT EXISTS chunk_path ON chunks(checkout,path);`);
       return new CodeIndex(db, lock, embed, chunker);
     } catch (error) {
       await db?.close();
-      await rm(lock, { recursive: true, force: true });
+      if (lock) await rm(lock, { recursive: true, force: true });
       throw error;
     }
   }
@@ -97,33 +106,50 @@ export class CodeIndex {
     this.queue = next.catch(() => {});
     return next;
   }
-  async stats(): Promise<{ files: number; chunks: number }> {
+  async stats(checkout = ""): Promise<{ files: number; chunks: number }> {
     return this.serial(async () => {
-      const [files] = await this.db.all("SELECT COUNT(*) AS n FROM files");
-      const [chunks] = await this.db.all("SELECT COUNT(*) AS n FROM chunks");
+      const [files] = await this.db.all(
+        "SELECT COUNT(*) AS n FROM files WHERE checkout=?",
+        checkout,
+      );
+      const [chunks] = await this.db.all(
+        "SELECT COUNT(*) AS n FROM chunks WHERE checkout=?",
+        checkout,
+      );
       return { files: Number(files.n), chunks: Number(chunks.n) };
     });
   }
-  async services(): Promise<string[]> {
+  async services(checkout = ""): Promise<string[]> {
     return this.serial(async () =>
       (
-        await this.db.all("SELECT DISTINCT service FROM files ORDER BY service")
+        await this.db.all(
+          "SELECT DISTINCT service FROM files WHERE checkout=? ORDER BY service",
+          checkout,
+        )
       ).map((r: { service: string }) => r.service),
     );
   }
-  async paths(): Promise<string[]> {
+  async paths(checkout = ""): Promise<string[]> {
     return this.serial(async () =>
-      (await this.db.all("SELECT path FROM files")).map(
-        (r: { path: string }) => r.path,
-      ),
+      (
+        await this.db.all("SELECT path FROM files WHERE checkout=?", checkout)
+      ).map((r: { path: string }) => r.path),
     );
   }
-  async remove(file: string): Promise<void> {
+  async remove(file: string, checkout = ""): Promise<void> {
     await this.serial(async () => {
       await this.db.exec("BEGIN");
       try {
-        await this.db.run("DELETE FROM chunks WHERE path=?", file);
-        await this.db.run("DELETE FROM files WHERE path=?", file);
+        await this.db.run(
+          "DELETE FROM chunks WHERE checkout=? AND path=?",
+          checkout,
+          file,
+        );
+        await this.db.run(
+          "DELETE FROM files WHERE checkout=? AND path=?",
+          checkout,
+          file,
+        );
         await this.db.exec("COMMIT");
       } catch (e) {
         await this.db.exec("ROLLBACK");
@@ -135,19 +161,24 @@ export class CodeIndex {
     file: IndexedFile,
     signal: AbortSignal,
     current: () => Promise<boolean> = async () => true,
+    embed: Embed = this.embed,
   ): Promise<{ embedded: number; reused: number; stale?: boolean }> {
     signal.throwIfAborted();
+    const checkout = file.checkout ?? "";
+    const repository = file.repository ?? "";
     const hash = digest(file.text);
     const old = await this.serial(() =>
       this.db.get(
-        "SELECT hash,service,language FROM files WHERE path=?",
+        "SELECT hash,service,language,repository FROM files WHERE checkout=? AND path=?",
+        checkout,
         file.path,
       ),
     );
     if (
       old?.hash === hash &&
       old.service === file.service &&
-      old.language === file.language
+      old.language === file.language &&
+      old.repository === repository
     )
       return { embedded: 0, reused: 0 };
     const chunks = await this.chunker.chunks(file.path, file.text);
@@ -172,7 +203,7 @@ export class CodeIndex {
       signal.throwIfAborted();
       if (!(await current())) return { embedded, reused: 0, stale: true };
       const batch = missing.slice(i, i + 16);
-      const values = await this.embed(
+      const values = await embed(
         batch.map((h) => inputs[hashes.indexOf(h)]),
         signal,
       );
@@ -195,7 +226,11 @@ export class CodeIndex {
       if (!(await current())) return { embedded, reused: 0, stale: true };
       await this.db.exec("BEGIN");
       try {
-        await this.db.run("DELETE FROM chunks WHERE path=?", file.path);
+        await this.db.run(
+          "DELETE FROM chunks WHERE checkout=? AND path=?",
+          checkout,
+          file.path,
+        );
         for (const h of missing)
           await this.db.run(
             "INSERT OR IGNORE INTO embeddings VALUES (?,vector32(?))",
@@ -205,8 +240,10 @@ export class CodeIndex {
         for (let i = 0; i < chunks.length; i++) {
           const c = chunks[i];
           await this.db.run(
-            "INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,vector32(?))",
-            digest(`${file.path}:${i}:${hash}`),
+            "INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,vector32(?))",
+            digest(`${checkout}:${file.path}:${i}:${hash}`),
+            checkout,
+            repository,
             file.path,
             file.service,
             file.language,
@@ -222,11 +259,13 @@ export class CodeIndex {
           );
         }
         await this.db.run(
-          "INSERT OR REPLACE INTO files VALUES (?,?,?,?)",
+          "INSERT OR REPLACE INTO files VALUES (?,?,?,?,?,?)",
+          checkout,
           file.path,
           hash,
           file.service,
           file.language,
+          repository,
         );
         signal.throwIfAborted();
         await this.db.exec("COMMIT");
@@ -255,6 +294,17 @@ export class CodeIndex {
         ?.slice(0, 12) ?? [];
     const conditions: string[] = [],
       args: string[] = [];
+    if (filter.checkout !== undefined) {
+      conditions.push("checkout=?");
+      args.push(filter.checkout);
+    } else {
+      conditions.push("checkout=?");
+      args.push("");
+    }
+    if (filter.repository) {
+      conditions.push("repository=?");
+      args.push(filter.repository);
+    }
     if (filter.service) {
       conditions.push("service=?");
       args.push(filter.service);
@@ -270,7 +320,7 @@ export class CodeIndex {
     }
     const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
     const columns =
-      "id,path,service,language,symbol,kind,startLine,endLine,parentStart,parentEnd,text,hash";
+      "id,checkout,repository,path,service,language,symbol,kind,startLine,endLine,parentStart,parentEnd,text,hash";
     return this.serial(async () => {
       const semantic = (await this.db.all(
         `SELECT ${columns}, vector_distance_cos(embedding,vector32(?)) AS distance FROM chunks${where} ORDER BY distance LIMIT ?`,
@@ -320,6 +370,6 @@ export class CodeIndex {
   }
   async close(): Promise<void> {
     await this.serial(() => this.db.close());
-    await rm(this.lock, { recursive: true, force: true });
+    if (this.lock) await rm(this.lock, { recursive: true, force: true });
   }
 }

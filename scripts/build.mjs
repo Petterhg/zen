@@ -11,6 +11,16 @@ await build({
   external: ["vscode", "@tursodatabase/database", "web-tree-sitter"],
   sourcemap: true,
 });
+await build({
+  entryPoints: ["extension/src/shared-index-daemon.ts"],
+  outfile: "extension/dist/shared-index-daemon.cjs",
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "cjs",
+  external: ["@tursodatabase/database", "web-tree-sitter"],
+  sourcemap: true,
+});
 console.log("Pair Code extension built.");
 
 await build({
