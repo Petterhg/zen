@@ -22,7 +22,7 @@
       "secondarySidebar": [
         {
           "id": "pairCode",
-          "title": "Zen",
+          "title": "Your pair",
           "icon": "media/pair.svg"
         }
       ]
@@ -32,8 +32,8 @@
         {
           "type": "webview",
           "id": "pairCode.companion",
-          "name": "Pairing",
-          "contextualTitle": "Zen"
+          "name": "Your pair",
+          "contextualTitle": "Your pair"
         }
       ]
     },

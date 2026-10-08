@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
 const browser = await chromium.launch({
   ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
@@ -189,6 +189,47 @@ try {
       assistanceLevel: 25,
     }),
   );
+  await page.evaluate(() =>
+    window.host({
+      type: "taskIntent",
+      text: "Explain the <script>retry</script> function before we change it.",
+    }),
+  );
+  assert.equal(await page.locator("#taskIntent script").count(), 0);
+  assert.equal(
+    await page.locator("#taskIntentText").textContent(),
+    "Explain the <script>retry</script> function before we change it.",
+  );
+  // Narrow companion layout: pairing precedes settings and index status stays at the bottom.
+  await page.setViewportSize({ width: 325, height: 900 });
+  await page.evaluate(() => {
+    document.getElementById("pairingSettings").open = false;
+  });
+  const voiceBox = await page.locator(".voice-card").boundingBox();
+  const indexBox = await page.locator(".code-index").boundingBox();
+  assert.ok(voiceBox && indexBox && voiceBox.y < indexBox.y);
+  assert.equal(
+    await page.evaluate(() => document.body.scrollWidth > window.innerWidth),
+    false,
+  );
+  await mkdir("artifacts/native-companion", { recursive: true });
+  for (const theme of ["light", "dark"]) {
+    const palette = JSON.parse(
+      await readFile(`extension/media/zen-${theme}.json`, "utf8"),
+    );
+    await page.evaluate((colors) => {
+      for (const [key, value] of Object.entries(colors))
+        document.documentElement.style.setProperty(
+          "--vscode-" + key.replaceAll(".", "-"),
+          value,
+        );
+    }, palette.colors);
+    await page.screenshot({ path: `artifacts/native-companion/${theme}.png` });
+  }
+  await page.evaluate(() => {
+    document.getElementById("pairingSettings").open = true;
+  });
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.locator("#connect").click();
   await page.waitForFunction(
     () =>

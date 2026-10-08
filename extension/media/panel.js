@@ -623,6 +623,10 @@
       if (data.error) entry.reject(new Error(data.error));
       else entry.resolve(data.result);
     }
+    if (data.type === "taskIntent") {
+      $("taskIntentText").textContent = String(data.text ?? "").slice(0, 320);
+      $("taskIntent").classList.toggle("hidden", !data.text);
+    }
     if (data.type === "checkpointLoaded") {
       $("checkpointNote").textContent =
         "Previous pairing loaded" +
@@ -686,7 +690,11 @@
         : "Thinking about your code…";
     }
     if (data.type === "error") showError(data.message, "backend");
-    if (data.type === "stopVoice") stop();
+    if (data.type === "stopVoice") {
+      $("taskIntentText").textContent = "";
+      $("taskIntent").classList.add("hidden");
+      stop();
+    }
     if (data.type === "voiceControl" && data.sessionToken === sessionToken) {
       if (data.action === "mute") $("mute").click();
       if (data.action === "end") stop();

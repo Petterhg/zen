@@ -11,7 +11,6 @@
   <body>
     <header class="identity">
       <div class="board-identity">
-        <span class="eyebrow">YOUR PAIR</span>
         <h2 id="workspaceLabel">Your workspace</h2>
       </div>
       <div class="header-actions">
@@ -50,10 +49,15 @@
           ><span id="contextFile">No shared file</span
           ><span id="selectionBadge"></span>
         </section>
-        <div id="setup" class="setup-note">
-          <span>Connect your models to begin.</span
-          ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
-        </div>
+
+        <section
+          id="taskIntent"
+          class="task-intent hidden"
+          aria-label="Current intent"
+        >
+          <span class="eyebrow block-label">THE INTENT</span>
+          <p id="taskIntentText"></p>
+        </section>
         <p id="checkpointNote" class="session-note hidden" role="status"></p>
         <section
           id="researchSection"
@@ -77,32 +81,39 @@
           aria-live="polite"
         ></p>
         <div id="error" class="error hidden" role="alert"></div>
-        <section class="code-index" aria-label="Code indexing">
-          <div class="settings-row">
-            <span id="indexStatus" role="status">Code index starting…</span
-            ><button
-              id="refreshIndex"
-              class="text-button"
-              title="Refresh code index"
-            >
-              ↻
-            </button>
-          </div>
-          <progress
-            id="indexProgress"
-            class="hidden"
-            aria-label="Files checked in current repository"
-          ></progress>
-          <details class="index-details">
-            <summary>Index details</summary>
-            <p id="indexDetail" class="quiet-note"></p>
-          </details>
-          <p id="indexError" class="error hidden" role="alert"></p>
-        </section>
+
         <div id="backendActivity" class="backend-activity hidden">
           <span class="working-dot"></span><span>Thinking about your code…</span
           ><button id="cancel" class="text-button">Stop</button>
         </div>
+        <section class="voice-card" aria-label="Voice pairing">
+          <div class="voice-mark" id="voiceMark" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <span class="eyebrow block-label">PAIRING SESSION</span>
+          <h1 id="voiceTitle">Ready when you are</h1>
+          <p id="voiceDescription">Start when you’re ready.</p>
+          <div class="session-controls">
+            <button id="connect" class="primary">Start Pairing</button>
+            <button id="mute" class="secondary hidden">Mute</button>
+            <button
+              id="disconnect"
+              class="icon-button hidden"
+              aria-label="End voice session"
+              title="End voice session"
+            >
+              ×
+            </button>
+          </div>
+          <div class="connection-line">
+            <span class="status-dot" id="statusDot"></span
+            ><span id="voiceStatus">Voice is disconnected</span>
+          </div>
+          <audio id="audio" autoplay></audio>
+          <button id="playAudio" class="text-button hidden">
+            Play Assistant Audio
+          </button>
+        </section>
         <section class="pairing-style" aria-label="Pairing style">
           <span class="eyebrow block-label">WORKING AGREEMENT</span>
           <div class="pairing-style-heading">
@@ -144,6 +155,10 @@
           </button>
         </form>
         <p id="deliveryStatus" class="stale" aria-live="polite"></p>
+        <div id="setup" class="setup-note">
+          <span>Connect your models to begin.</span
+          ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
+        </div>
         <details id="pairingSettings" class="pairing-settings">
           <summary>Pairing settings</summary>
           <div class="settings-row">
@@ -198,33 +213,28 @@
           </footer>
         </details>
       </div>
-      <section class="voice-card" aria-label="Voice pairing">
-        <div class="voice-mark" id="voiceMark" aria-hidden="true">
-          <i></i><i></i><i></i><i></i><i></i>
-        </div>
-        <span class="eyebrow block-label">PAIRING SESSION</span>
-        <h1 id="voiceTitle">Ready when you are</h1>
-        <p id="voiceDescription">Start when you’re ready.</p>
-        <div class="session-controls">
-          <button id="connect" class="primary">Start Pairing</button>
-          <button id="mute" class="secondary hidden">Mute</button>
-          <button
-            id="disconnect"
-            class="icon-button hidden"
-            aria-label="End voice session"
-            title="End voice session"
+
+      <section class="code-index" aria-label="Code indexing">
+        <div class="settings-row">
+          <span id="indexStatus" role="status">Code index starting…</span
+          ><button
+            id="refreshIndex"
+            class="text-button"
+            title="Refresh code index"
           >
-            ×
+            ↻
           </button>
         </div>
-        <div class="connection-line">
-          <span class="status-dot" id="statusDot"></span
-          ><span id="voiceStatus">Voice is disconnected</span>
-        </div>
-        <audio id="audio" autoplay></audio>
-        <button id="playAudio" class="text-button hidden">
-          Play Assistant Audio
-        </button>
+        <progress
+          id="indexProgress"
+          class="hidden"
+          aria-label="Files checked in current repository"
+        ></progress>
+        <details class="index-details">
+          <summary>Index details</summary>
+          <p id="indexDetail" class="quiet-note"></p>
+        </details>
+        <p id="indexError" class="error hidden" role="alert"></p>
       </section>
     </main>
     <script nonce="{{nonce}}" src="{{protocol}}"></script>

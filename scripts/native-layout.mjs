@@ -63,8 +63,23 @@ export function patchRuntimeLayout(resources) {
     '(()=>{if(!this.storageService.getBoolean("zen.layout.reference.v1",0,false)){this.stateCache.set(Ti.SIDEBAR_SIZE.name,Math.min(196,o.width/4));this.stateCache.set(Ti.AUXILIARYBAR_SIZE.name,Math.min(325,o.width/3));this.stateCache.set(Ti.PANEL_SIZE.name,Math.min(210,o.height/3));this.storageService.store("zen.layout.reference.v1",true,0,1)}})(),Ti.SIDEBAR_SIZE.defaultValue=Math.min(196,o.width/4)',
     'getBoolean("zen.layout.reference.v1"',
   );
+  replace(
+    file,
+    "(this.isCommandCenterVisible?Jxe:this.macTitlebarSize)/(this.preventZoom?c_(ye(this.element)):1)",
+    "Math.max(54,this.macTitlebarSize)/(this.preventZoom?c_(ye(this.element)):1)",
+    "Math.max(54,this.macTitlebarSize)",
+  );
 }
 export function patchSourceLayout(source) {
+  replace(
+    path.join(
+      source,
+      "src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts",
+    ),
+    "(this.isCommandCenterVisible ? DEFAULT_CUSTOM_TITLEBAR_HEIGHT : this.macTitlebarSize) /",
+    "Math.max(54, DEFAULT_CUSTOM_TITLEBAR_HEIGHT, this.macTitlebarSize) /",
+    "Math.max(54, DEFAULT_CUSTOM_TITLEBAR_HEIGHT, this.macTitlebarSize)",
+  );
   replace(
     path.join(
       source,

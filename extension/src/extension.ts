@@ -1143,6 +1143,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         memoryScope,
       );
       controller.signal.throwIfAborted();
+      this.post({ type: "taskIntent", text: latestHuman.slice(0, 320) });
       const configuredEffort = this.configuration().get<string>(
         "reasoningEffort",
         "auto",

@@ -598,3 +598,77 @@ body {
     margin: 0 20px 12px;
   }
 }
+
+/* Pairing is primary; infrastructure status stays in the quiet bottom strip. */
+.identity {
+  height: 58px;
+  padding: 8px 24px 16px;
+}
+main {
+  height: calc(100dvh - 58px);
+}
+.workboard-scroll {
+  padding-top: 8px;
+}
+.voice-card {
+  margin: 24px 0 0;
+  padding: 16px;
+}
+.voice-card .session-controls {
+  margin-top: 14px;
+}
+.voice-card .block-label {
+  margin-bottom: 14px;
+}
+.pairing-style {
+  margin-top: 28px;
+}
+.setup-note {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+}
+main > .code-index {
+  margin: 0;
+  padding: 12px 24px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+#indexError {
+  margin: 6px 0 0;
+  padding: 0 0 0 8px;
+  border: 0;
+  border-left: 2px solid var(--red);
+  background: transparent;
+  font-size: 10px;
+  line-height: 1.6;
+  max-height: 95px;
+  overflow: auto;
+}
+@media (max-height: 650px) {
+  .identity {
+    height: 48px;
+  }
+  main {
+    height: calc(100dvh - 48px);
+  }
+  .voice-card {
+    margin: 18px 0 0;
+  }
+  main > .code-index {
+    padding: 8px 20px;
+  }
+}
+
+.task-intent {
+  margin: 24px 0 0;
+}
+.task-intent p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
