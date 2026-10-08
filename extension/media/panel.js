@@ -695,6 +695,15 @@
       $("taskIntent").classList.add("hidden");
       stop();
     }
+    // Starting a new session cannot use the previous transport token: the host
+    // increments it on disconnect. Mute/end still target only the current session.
+    if (
+      data.type === "voiceControl" &&
+      data.action === "start" &&
+      (!peer || closing)
+    ) {
+      $("connect").click();
+    }
     if (data.type === "voiceControl" && data.sessionToken === sessionToken) {
       if (data.action === "mute") $("mute").click();
       if (data.action === "end") stop();

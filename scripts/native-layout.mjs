@@ -69,8 +69,42 @@ export function patchRuntimeLayout(resources) {
     "Math.max(54,this.macTitlebarSize)/(this.preventZoom?c_(ye(this.element)):1)",
     "Math.max(54,this.macTitlebarSize)",
   );
+  replace(
+    file,
+    "layoutContents(i,e){return Ui(this.partLayout).layout(i,e)}",
+    "layoutContents(i,e){return Ui(this.partLayout).layout(i,zenLayoutPart(this,i,e,Ie))}",
+    "zenLayoutPart(this,i,e,Ie)",
+  );
+  replace(
+    file,
+    "Ti.SIDEBAR_SIZE.defaultValue=Math.min(196,o.width/4)",
+    '(()=>{if(!this.storageService.getBoolean("zen.chrome.v2",0,false)){const key="workbench.panel.pinnedPanels";this.storageService.store(key,zenQuietPanelPins(this.storageService.get(key,0,"[]")),0,0);this.storageService.store("zen.chrome.v2",true,0,1)}})(),Ti.SIDEBAR_SIZE.defaultValue=Math.min(196,o.width/4)',
+    'getBoolean("zen.chrome.v2"',
+  );
 }
 export function patchSourceLayout(source) {
+  const partFile = path.join(source, "src/vs/workbench/browser/part.ts");
+  const partText = readFileSync(partFile, "utf8");
+  if (!partText.includes("import { zenLayoutPart }"))
+    writeFileSync(
+      partFile,
+      "import { zenLayoutPart } from './parts/editor/zenLayout.js';\nimport { ICommandService } from '../../platform/commands/common/commands.js';\n" +
+        partText,
+    );
+  replace(
+    partFile,
+    "return partLayout.layout(width, height);",
+    "return partLayout.layout(width, zenLayoutPart(this, width, height, ICommandService));",
+    "zenLayoutPart(this, width, height, ICommandService)",
+  );
+  const layoutFile = path.join(source, "src/vs/workbench/browser/layout.ts");
+  const layoutText = readFileSync(layoutFile, "utf8");
+  if (!layoutText.includes("import { zenQuietPanelPins }"))
+    writeFileSync(
+      layoutFile,
+      "import { zenQuietPanelPins } from './parts/editor/zenLayout.js';\n" +
+        layoutText,
+    );
   replace(
     path.join(
       source,
@@ -113,12 +147,32 @@ export function patchSourceLayout(source) {
     LayoutStateKeys.SIDEBAR_SIZE.defaultValue = Math.min(196, mainContainerDimension.width / 4);`,
     "getBoolean('zen.layout.reference.v1'",
   );
+  replace(
+    layoutFile,
+    "LayoutStateKeys.SIDEBAR_SIZE.defaultValue = Math.min(196, mainContainerDimension.width / 4);",
+    `if (!this.storageService.getBoolean('zen.chrome.v2', StorageScope.PROFILE, false)) {
+      const key = 'workbench.panel.pinnedPanels';
+      this.storageService.store(key, zenQuietPanelPins(this.storageService.get(key, StorageScope.PROFILE, '[]')), StorageScope.PROFILE, StorageTarget.USER);
+      this.storageService.store('zen.chrome.v2', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+    }
+    LayoutStateKeys.SIDEBAR_SIZE.defaultValue = Math.min(196, mainContainerDimension.width / 4);`,
+    "getBoolean('zen.chrome.v2'",
+  );
   const directory = path.join(source, "src/vs/workbench/browser/parts/editor");
   copyFileSync(
     new URL("./native-layout.ts", import.meta.url),
     path.join(directory, "zenLayout.ts"),
   );
   const file = path.join(directory, "editorGroupView.ts");
+  const oldGroup =
+    "zenLayoutGroup({ element: this.element, titleContainer: this.titleContainer, editorContainer: this.editorContainer, activeEditor: this.activeEditor ?? undefined }, width, height)";
+  writeFileSync(
+    file,
+    readFileSync(file, "utf8").replace(
+      oldGroup,
+      "zenLayoutGroup(this, width, height)",
+    ),
+  );
   const content = readFileSync(file, "utf8");
   if (!content.includes("import { zenLayoutGroup }"))
     writeFileSync(
@@ -128,7 +182,7 @@ export function patchSourceLayout(source) {
   replace(
     file,
     "this.element.classList.toggle('max-height-478px', height <= 478);",
-    "this.element.classList.toggle('max-height-478px', height <= 478);\n\t\tconst zenGeometry = zenLayoutGroup({ element: this.element, titleContainer: this.titleContainer, editorContainer: this.editorContainer, activeEditor: this.activeEditor ?? undefined }, width, height);\n\t\twidth = zenGeometry.width; height = zenGeometry.height; top += zenGeometry.heading; left += zenGeometry.inset;",
+    "this.element.classList.toggle('max-height-478px', height <= 478);\n\t\tconst zenGeometry = zenLayoutGroup(this, width, height);\n\t\twidth = zenGeometry.width; height = zenGeometry.height; top += zenGeometry.heading; left += zenGeometry.inset;",
     "const zenGeometry = zenLayoutGroup",
   );
 }

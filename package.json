@@ -16,7 +16,7 @@
     "lint": "eslint extension/src extension/media scripts test prototypes",
     "tooling": "node scripts/install-tooling.mjs",
     "test:ui": "node scripts/ui-smoke.mjs",
-    "test:panel": "node scripts/test-panel.mjs",
+    "test:panel": "node scripts/test-panel.mjs && node scripts/test-native-layout.mjs",
     "validate": "npm run check && npm run lint && npm run build && npm test && npm run test:panel && npm run test:prototype",
     "prototype:zen": "node scripts/serve-prototype.mjs",
     "test:prototype": "node scripts/test-prototype.mjs",

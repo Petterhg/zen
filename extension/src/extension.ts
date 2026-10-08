@@ -114,6 +114,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private sessionJob?: AbortController;
   private jobRevision = 0;
   private sessionToken = 0;
+  private panelReady = false;
+  private pendingVoiceStart = false;
   private contextTimer?: ReturnType<typeof setTimeout>;
   private seenDelegations = new Set<string>();
   private disposables: vscode.Disposable[] = [];
@@ -133,7 +135,51 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     98,
   );
 
-  voiceControl(action: "mute" | "end"): void {
+  async startVoice(): Promise<void> {
+    this.pendingVoiceStart = true;
+    await vscode.commands.executeCommand("pairCode.open");
+    if (this.panelReady && this.pendingVoiceStart) {
+      this.pendingVoiceStart = false;
+      this.voiceControl("start");
+    }
+  }
+  async chooseAssistance(): Promise<void> {
+    const selected = await vscode.window.showQuickPick(
+      [
+        {
+          label: "Voice only",
+          description: "Explain; never write code",
+          level: 0,
+        },
+        {
+          label: "One small step",
+          description: "Small suggestions, together",
+          level: 25,
+        },
+        {
+          label: "Work together",
+          description: "Draft a focused change",
+          level: 60,
+        },
+        {
+          label: "Draft it for me",
+          description: "Implement, then explain",
+          level: 100,
+        },
+      ],
+      {
+        title: "How should your pair help?",
+        placeHolder: "The workboard slider allows finer adjustment",
+      },
+    );
+    if (selected)
+      await this.configuration().update(
+        "assistanceLevel",
+        selected.level,
+        vscode.ConfigurationTarget.Global,
+      );
+  }
+  voiceControl(action: "start" | "mute" | "end"): void {
     this.post({
       type: "voiceControl",
       action,
@@ -141,6 +187,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     });
   }
   private updateVoiceStatus(state: string): void {
+    void vscode.commands.executeCommand("setContext", "zen.voiceState", state);
     const connected = state === "listening" || state === "muted";
     this.status.text = connected
       ? "$(mic) Zen · " + (state === "muted" ? "Muted" : "Listening")
@@ -547,6 +594,11 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     return assistanceLevel(this.configuration().get("assistanceLevel"));
   }
   private publishAssistance(): void {
+    void vscode.commands.executeCommand(
+      "setContext",
+      "zen.assistanceLevel",
+      this.assistance(),
+    );
     this.post({
       type: "liveAppend",
       sessionToken: this.sessionToken,
@@ -557,6 +609,11 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     });
   }
   private async publishConfiguration(): Promise<void> {
+    void vscode.commands.executeCommand(
+      "setContext",
+      "zen.assistanceLevel",
+      this.assistance(),
+    );
     this.post({ type: "indexStatus", ...this.codeIndex.status });
     const config = this.configuration();
     const provider = config.get<Provider>("backend", "groq");
@@ -787,6 +844,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.sessionJob?.abort();
         this.sessionToken++;
         this.view = undefined;
+        this.panelReady = false;
+        this.pendingVoiceStart = false;
         this.updateVoiceStatus("disconnected");
       }),
     );
@@ -883,6 +942,11 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.post({ type: "researchHistory", articles: this.research });
         await this.publishConfiguration();
         this.publishContext();
+        this.panelReady = true;
+        if (this.pendingVoiceStart) {
+          this.pendingVoiceStart = false;
+          this.voiceControl("start");
+        }
         return;
       }
       if (
@@ -1857,6 +1921,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     await this.runBackend();
   }
   dispose(): void {
+    void vscode.commands.executeCommand("setContext", "zen.available", false);
     clearTimeout(this.contextTimer);
     this.cancel();
     this.inlineJob?.abort();
@@ -1869,11 +1934,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   previewEdit: (result: BackendResult) => Promise<void>;
 }> {
   const companion = new Companion(context);
+  await vscode.commands.executeCommand(
+    "setContext",
+    "zen.available",
+    vscode.workspace.isTrusted,
+  );
   context.subscriptions.push(
     companion,
     vscode.window.registerWebviewViewProvider("pairCode.companion", companion, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    vscode.commands.registerCommand("pairCode.startVoice", () =>
+      companion.startVoice(),
+    ),
+    vscode.commands.registerCommand("pairCode.chooseAssistance", () =>
+      companion.chooseAssistance(),
+    ),
     vscode.commands.registerCommand("pairCode.toggleVoiceMute", () =>
       companion.voiceControl("mute"),
     ),

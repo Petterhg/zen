@@ -125,7 +125,7 @@ The browser study is a design/interaction reference. It is not a replacement edi
 
 ## Native core UI pass
 
-The shipped companion uses a compact workspace/file header, always-accessible assistance slider, conditional research cards and a fixed voice dock. Index details are expandable; progress and failures remain visible. Settings remain secondary. The status bar exposes acknowledged mute/unmute and end-session controls while voice is connected, including when the workboard is folded. Commands target the current session token; they reuse the panel's mute acknowledgement and disconnect lifecycle.
+The shipped companion uses a compact workspace/file header, always-accessible assistance slider, conditional research cards and pairing controls beside the working agreement. Index details are expandable; progress and failures remain visible. Settings remain secondary. The status bar exposes acknowledged mute/unmute and end-session controls while voice is connected, including when the workboard is folded. Commands target the current session token; they reuse the panel's mute acknowledgement and disconnect lifecycle.
 
 `scripts/native-shell.css` is the canonical native overlay, installed into both pinned source and the downloaded runtime. The launcher reapplies it idempotently and regenerates runtime checksums before signing. Styling keeps Monaco/xterm, native actions, resizing, keyboard focus and security indicators intact. New appearance defaults preserve existing user choices; Apply Calm Layout opts an existing profile into compact tabs and quiet tree/terminal defaults. This is the individual pairing surface; prototype task boards, team controls and delivery agents remain deferred.
 
@@ -136,3 +136,11 @@ The initial native pass was primarily cosmetic and did not reproduce the design 
 The reference is still a target, not evidence of a shipped pixel-perfect match. Native file handling, diagnostics, terminal controls and macOS window affordances remain functional. Runtime and source patches share the typed layout helper, fail on unexpected upstream anchors and retain integrity checks. Verify light/dark native windows after restart, small splits, file switching, inline acceptance and scrolling before claiming parity.
 
 The macOS title-bar override also reserves the 54px height; the browser implementation alone does not control macOS. Pairing controls now follow current-file/research context in the main workboard flow, above the working agreement. Index progress and bounded, scrollable error details live in a bottom status strip. The duplicated workboard heading is removed. Automated 325px companion screenshots are generated in `artifacts/native-companion/`; these verify the webview, not full native-shell parity.
+
+## Native pairing strip and quiet chrome
+
+The editor now reserves a 44px bottom row for start, acknowledged mute/unmute, end, assistance presets, terminal and workboard controls. The row belongs to the bottom terminal panel when visible, otherwise to the editor. Monaco and xterm receive the remaining dimensions; no content is covered. Presets update the same assistance setting as the fine-grained slider and do not disconnect voice. Starting opens the workboard and waits for its ready handshake.
+
+Explorer hides Outline and Timeline once per profile using native view visibility. Auxiliary panel tabs are unpinned once; diagnostics, output, debug and ports remain available from native menus and commands. Custom panels and later choices survive. File headings refresh immediately on tab changes. The launcher invalidates only rebuildable built-in extension scan caches so updated contributions appear on the first restart.
+
+Validation includes 78 unit tests, simulated panel lifecycle, browser tests of the native layout helper and the prototype suite. Native light/dark surfaces, assistance synchronization and terminal folding were inspected in an isolated empty window; Explorer cleanup and file geometry were checked in the restricted demo. No folder trust or Keychain permissions were changed. This pass did not make live microphone/provider calls or exercise a native inline proposal.

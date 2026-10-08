@@ -641,7 +641,10 @@ try {
       assistanceLevel: 25,
     }),
   );
-  await page.locator("#connect").click();
+  // A native restart is a fresh user intent, independent of the closed transport token.
+  await page.evaluate(() =>
+    window.host({ type: "voiceControl", action: "start", sessionToken: 999 }),
+  );
   await page.waitForFunction(
     () =>
       window.peers.length === 2 &&

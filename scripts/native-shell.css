@@ -161,3 +161,69 @@
   letter-spacing: -1px;
   pointer-events: none;
 }
+
+/* A real reserved layout row; never covers Monaco or terminal output. */
+.monaco-workbench .zen-pairing-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editor-background);
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  z-index: 5;
+}
+.monaco-workbench .zen-pairing-strip button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 6px 9px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.monaco-workbench .zen-pairing-strip button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+.monaco-workbench .zen-pairing-strip button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+.monaco-workbench .zen-pairing-strip button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.monaco-workbench .zen-pairing-strip .zen-strip-primary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+.monaco-workbench .zen-pairing-strip [hidden] {
+  display: none;
+}
+.monaco-workbench .zen-strip-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.monaco-workbench .zen-pairing-strip.narrow {
+  padding: 0 10px;
+  gap: 3px;
+}
+.monaco-workbench .zen-pairing-strip.narrow .zen-strip-status,
+.monaco-workbench .zen-pairing-strip.compact .zen-strip-secondary {
+  display: none;
+}
+.monaco-workbench .zen-pairing-strip.narrow .zen-strip-primary {
+  margin-right: auto;
+}

@@ -99,6 +99,14 @@
         "title": "Zen: Start Fresh Pairing"
       },
       {
+        "command": "pairCode.startVoice",
+        "title": "Zen: Start Pairing"
+      },
+      {
+        "command": "pairCode.chooseAssistance",
+        "title": "Zen: Choose Assistance"
+      },
+      {
         "command": "pairCode.toggleVoiceMute",
         "title": "Zen: Mute / Unmute Voice"
       },

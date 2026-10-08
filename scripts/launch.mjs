@@ -1,6 +1,13 @@
 import { ensureRuntimeSignature } from "./runtime-signing.mjs";
 import { applyRuntimeShell } from "./native-shell.mjs";
-import { existsSync, mkdirSync, writeFileSync, cpSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  cpSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -65,6 +72,18 @@ applyRuntimeShell(
 );
 if (process.platform === "darwin")
   ensureRuntimeSignature(path.join(root, ".runtime/VSCodium.app"));
+// The upstream scanner otherwise serves a stale built-in manifest for the
+// first window after an in-place development update. Only remove rebuildable
+// scan metadata; user extensions, settings and working copies are untouched.
+const scanCache = path.join(userData, "CachedProfilesData");
+if (existsSync(scanCache)) {
+  for (const profile of readdirSync(scanCache, { withFileTypes: true })) {
+    if (profile.isDirectory())
+      rmSync(path.join(scanCache, profile.name, "extensions.builtin.cache"), {
+        force: true,
+      });
+  }
+}
 const args = [
   "--new-window",
   "--user-data-dir",
