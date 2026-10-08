@@ -672,3 +672,114 @@ main > .code-index {
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
+
+/* One compact voice toolbar, then assistance and research. Configuration is opt-in. */
+.identity {
+  height: 84px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  align-items: flex-start;
+}
+.identity .voice-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  flex: 1;
+  min-width: 0;
+}
+.voice-card .eyebrow,
+.voice-card h1,
+.voice-card #voiceDescription,
+.voice-mark {
+  display: none;
+}
+.voice-card .session-controls {
+  margin: 0;
+  gap: 8px;
+}
+.voice-card .connection-line {
+  margin-top: 5px;
+  font-size: 10px;
+}
+.header-actions {
+  padding-top: 0;
+}
+main {
+  height: calc(100dvh - 84px);
+  min-height: 0;
+}
+.workboard-scroll {
+  padding: 24px 20px;
+}
+.pairing-style {
+  margin: 0;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+.pairing-style-heading {
+  font-size: 12px;
+}
+.pairing-style-endpoints {
+  font-size: 10px;
+}
+#assistanceDescription {
+  font-size: 11px;
+  line-height: 1.65;
+  margin-bottom: 0;
+}
+.pairing-settings {
+  margin-top: 20px;
+  border: 0;
+}
+.pairing-settings > summary {
+  display: none;
+}
+.pairing-settings:not([open]) {
+  display: none;
+}
+.settings-title {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+.pairing-settings .settings-row {
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+}
+.pairing-settings .code-index {
+  padding: 12px 0;
+  margin: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.pairing-settings .context-bar,
+.pairing-settings .task-intent,
+.pairing-settings #checkpointNote {
+  font-size: 11px;
+}
+.research {
+  margin-top: 20px;
+}
+#editStatus:empty,
+#deliveryStatus:empty {
+  display: none;
+}
+.primary {
+  padding: 6px 12px;
+  font-size: 11px;
+}
+input[type="range"] {
+  accent-color: var(--accent);
+}
+@media (max-width: 260px) {
+  .identity {
+    padding: 12px;
+  }
+  .workboard-scroll {
+    padding: 20px 12px;
+  }
+  .icon-button {
+    padding: 5px;
+  }
+}

@@ -8,18 +8,18 @@ import {
 test("native editor inset reserves real layout space and adapts to small splits", () => {
   assert.deepEqual(zenEditorGeometry(920, 680), {
     inset: 28,
-    heading: 96,
+    heading: 0,
     width: 864,
-    height: 584,
+    height: 680,
   });
   assert.deepEqual(zenEditorGeometry(300, 250), {
     inset: 12,
-    heading: 48,
+    heading: 0,
     width: 276,
-    height: 202,
+    height: 250,
   });
   assert.equal(zenEditorGeometry(10, 20).width, 0);
-  assert.equal(zenEditorGeometry(10, 20).height, 0);
+  assert.equal(zenEditorGeometry(10, 20).height, 20);
 });
 
 test("quiet panel migration preserves custom tools and malformed state", () => {

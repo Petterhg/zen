@@ -137,10 +137,18 @@ The reference is still a target, not evidence of a shipped pixel-perfect match. 
 
 The macOS title-bar override also reserves the 54px height; the browser implementation alone does not control macOS. Pairing controls now follow current-file/research context in the main workboard flow, above the working agreement. Index progress and bounded, scrollable error details live in a bottom status strip. The duplicated workboard heading is removed. Automated 325px companion screenshots are generated in `artifacts/native-companion/`; these verify the webview, not full native-shell parity.
 
-## Native pairing strip and quiet chrome
+## Previous native pairing strip (superseded)
 
 The editor now reserves a 44px bottom row for start, acknowledged mute/unmute, end, assistance presets, terminal and workboard controls. The row belongs to the bottom terminal panel when visible, otherwise to the editor. Monaco and xterm receive the remaining dimensions; no content is covered. Presets update the same assistance setting as the fine-grained slider and do not disconnect voice. Starting opens the workboard and waits for its ready handshake.
 
 Explorer hides Outline and Timeline once per profile using native view visibility. Auxiliary panel tabs are unpinned once; diagnostics, output, debug and ports remain available from native menus and commands. Custom panels and later choices survive. File headings refresh immediately on tab changes. The launcher invalidates only rebuildable built-in extension scan caches so updated contributions appear on the first restart.
 
 Validation includes 78 unit tests, simulated panel lifecycle, browser tests of the native layout helper and the prototype suite. Native light/dark surfaces, assistance synchronization and terminal folding were inspected in an isolated empty window; Explorer cleanup and file geometry were checked in the restricted demo. No folder trust or Keychain permissions were changed. This pass did not make live microphone/provider calls or exercise a native inline proposal.
+
+## Simplified individual workboard
+
+The October 8 cleanup supersedes the bottom pairing strip and generated file heading above. Pairing controls now have a single location in a compact toolbar at the top of the workboard. The normal panel shows only assistance and conditional research/activity/errors. The gear reveals configuration, keys, context controls and diagnostics; the light/dark control remains beside it. The native title bar has branding at left and a Workboard toggle at right, with no filename duplication. The OS window title is retained for window switching and accessibility.
+
+On macOS the maintained main-process overlay calls Electron's `setWindowButtonVisibility(false)`. Native menus and shortcuts retain close/minimize/zoom/fullscreen, and title-bar dragging is preserved. Explorer's native delegate uses 28px rows so visual spacing agrees with hit testing and virtualization. Labels use 12px regular text; icons and twisties are quieter, and secondary header actions appear on hover or keyboard focus.
+
+Runtime and source overlays are both updated. Validation covers 78 unit checks, simulated voice/panel lifecycle, native-title command/layout fixtures and the browser study. Native light/dark panels, settings toggle, title-bar folding and hidden macOS buttons were inspected in a disposable empty window. Microphone/provider calls and live native inline proposals were not exercised by this UI pass.

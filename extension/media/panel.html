@@ -10,9 +10,34 @@
   </head>
   <body>
     <header class="identity">
-      <div class="board-identity">
-        <h2 id="workspaceLabel">Your workspace</h2>
-      </div>
+      <section class="voice-card" aria-label="Voice pairing">
+        <div class="voice-mark" id="voiceMark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <span class="eyebrow block-label">PAIRING SESSION</span>
+        <h1 id="voiceTitle">Ready when you are</h1>
+        <p id="voiceDescription">Start when you’re ready.</p>
+        <div class="session-controls">
+          <button id="connect" class="primary">Start Pairing</button>
+          <button id="mute" class="secondary hidden">Mute</button>
+          <button
+            id="disconnect"
+            class="icon-button hidden"
+            aria-label="End voice session"
+            title="End voice session"
+          >
+            ×
+          </button>
+        </div>
+        <div class="connection-line">
+          <span class="status-dot" id="statusDot"></span
+          ><span id="voiceStatus">Voice is disconnected</span>
+        </div>
+        <audio id="audio" autoplay></audio>
+        <button id="playAudio" class="text-button hidden">
+          Play Assistant Audio
+        </button>
+      </section>
       <div class="header-actions">
         <button
           id="switchTheme"
@@ -31,34 +56,34 @@
         >
           ⚙
         </button>
-        <button
-          id="foldWorkboard"
-          class="icon-button"
-          aria-label="Fold workboard"
-          title="Fold workboard (⌘⌥J)"
-        >
-          ›
-        </button>
       </div>
     </header>
     <main>
       <div class="workboard-scroll">
-        <span class="eyebrow block-label">IN FOCUS</span>
-        <section class="context-bar" aria-label="Shared editor context">
-          <span class="file-icon" aria-hidden="true">⌘</span
-          ><span id="contextFile">No shared file</span
-          ><span id="selectionBadge"></span>
+        <section class="pairing-style" aria-label="Pairing style">
+          <div class="pairing-style-heading">
+            <label for="assistanceLevel">Assistance</label
+            ><output id="assistanceLabel" for="assistanceLevel"
+              >One small step</output
+            >
+          </div>
+          <input
+            id="assistanceLevel"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value="25"
+            aria-describedby="assistanceDescription"
+          />
+          <div class="pairing-style-endpoints">
+            <span>Voice only</span><span>Draft it for me</span>
+          </div>
+          <p id="assistanceDescription" class="quiet-note">
+            Explain one small step, then wait. Tiny previews when requested.
+          </p>
         </section>
 
-        <section
-          id="taskIntent"
-          class="task-intent hidden"
-          aria-label="Current intent"
-        >
-          <span class="eyebrow block-label">THE INTENT</span>
-          <p id="taskIntentText"></p>
-        </section>
-        <p id="checkpointNote" class="session-note hidden" role="status"></p>
         <section
           id="researchSection"
           class="research hidden"
@@ -81,86 +106,74 @@
           aria-live="polite"
         ></p>
         <div id="error" class="error hidden" role="alert"></div>
+        <p id="indexError" class="error hidden" role="alert"></p>
 
         <div id="backendActivity" class="backend-activity hidden">
           <span class="working-dot"></span><span>Thinking about your code…</span
           ><button id="cancel" class="text-button">Stop</button>
         </div>
-        <section class="voice-card" aria-label="Voice pairing">
-          <div class="voice-mark" id="voiceMark" aria-hidden="true">
-            <i></i><i></i><i></i><i></i><i></i>
-          </div>
-          <span class="eyebrow block-label">PAIRING SESSION</span>
-          <h1 id="voiceTitle">Ready when you are</h1>
-          <p id="voiceDescription">Start when you’re ready.</p>
-          <div class="session-controls">
-            <button id="connect" class="primary">Start Pairing</button>
-            <button id="mute" class="secondary hidden">Mute</button>
-            <button
-              id="disconnect"
-              class="icon-button hidden"
-              aria-label="End voice session"
-              title="End voice session"
-            >
-              ×
-            </button>
-          </div>
-          <div class="connection-line">
-            <span class="status-dot" id="statusDot"></span
-            ><span id="voiceStatus">Voice is disconnected</span>
-          </div>
-          <audio id="audio" autoplay></audio>
-          <button id="playAudio" class="text-button hidden">
-            Play Assistant Audio
-          </button>
-        </section>
-        <section class="pairing-style" aria-label="Pairing style">
-          <span class="eyebrow block-label">WORKING AGREEMENT</span>
-          <div class="pairing-style-heading">
-            <label for="assistanceLevel">Assistance</label
-            ><output id="assistanceLabel" for="assistanceLevel"
-              >One small step</output
-            >
-          </div>
-          <input
-            id="assistanceLevel"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value="25"
-            aria-describedby="assistanceDescription"
-          />
-          <div class="pairing-style-endpoints">
-            <span>Do nothing</span><span>Draft it for me</span>
-          </div>
-          <p id="assistanceDescription" class="quiet-note">
-            Explain one small step, then wait. Tiny previews when requested.
-          </p>
-        </section>
-        <form id="composer" class="composer">
-          <label for="message" class="sr-only">Message your pair</label
-          ><textarea
-            id="message"
-            rows="1"
-            placeholder="Or type a request…"
-          ></textarea
-          ><button
-            class="send-button"
-            id="send"
-            aria-label="Send message"
-            title="Send message"
-          >
-            ↑
-          </button>
-        </form>
-        <p id="deliveryStatus" class="stale" aria-live="polite"></p>
-        <div id="setup" class="setup-note">
-          <span>Connect your models to begin.</span
-          ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
-        </div>
         <details id="pairingSettings" class="pairing-settings">
           <summary>Pairing settings</summary>
+          <h2 class="settings-title">Pairing settings</h2>
+          <span id="workspaceLabel" hidden></span>
+          <form id="composer" class="composer">
+            <label for="message" class="sr-only">Message your pair</label
+            ><textarea
+              id="message"
+              rows="1"
+              placeholder="Or type a request…"
+            ></textarea
+            ><button
+              class="send-button"
+              id="send"
+              aria-label="Send message"
+              title="Send message"
+            >
+              ↑
+            </button>
+          </form>
+          <p id="deliveryStatus" class="stale" aria-live="polite"></p>
+          <div id="setup" class="setup-note">
+            <span>Connect your models to begin.</span
+            ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
+          </div>
+          <span class="eyebrow block-label">IN FOCUS</span>
+          <section class="context-bar" aria-label="Shared editor context">
+            <span class="file-icon" aria-hidden="true">⌘</span
+            ><span id="contextFile">No shared file</span
+            ><span id="selectionBadge"></span>
+          </section>
+
+          <section
+            id="taskIntent"
+            class="task-intent hidden"
+            aria-label="Current intent"
+          >
+            <span class="eyebrow block-label">THE INTENT</span>
+            <p id="taskIntentText"></p>
+          </section>
+          <p id="checkpointNote" class="session-note hidden" role="status"></p>
+          <section class="code-index" aria-label="Code indexing">
+            <div class="settings-row">
+              <span id="indexStatus" role="status">Code index starting…</span
+              ><button
+                id="refreshIndex"
+                class="text-button"
+                title="Refresh code index"
+              >
+                ↻
+              </button>
+            </div>
+            <progress
+              id="indexProgress"
+              class="hidden"
+              aria-label="Files checked in current repository"
+            ></progress>
+            <details class="index-details">
+              <summary>Index details</summary>
+              <p id="indexDetail" class="quiet-note"></p>
+            </details>
+          </section>
           <div class="settings-row">
             <button id="configure" class="text-button">API keys</button
             ><button id="applyLayout" class="text-button">
@@ -213,29 +226,6 @@
           </footer>
         </details>
       </div>
-
-      <section class="code-index" aria-label="Code indexing">
-        <div class="settings-row">
-          <span id="indexStatus" role="status">Code index starting…</span
-          ><button
-            id="refreshIndex"
-            class="text-button"
-            title="Refresh code index"
-          >
-            ↻
-          </button>
-        </div>
-        <progress
-          id="indexProgress"
-          class="hidden"
-          aria-label="Files checked in current repository"
-        ></progress>
-        <details class="index-details">
-          <summary>Index details</summary>
-          <p id="indexDetail" class="quiet-note"></p>
-        </details>
-        <p id="indexError" class="error hidden" role="alert"></p>
-      </section>
     </main>
     <script nonce="{{nonce}}" src="{{protocol}}"></script>
     <script nonce="{{nonce}}" src="{{js}}"></script>

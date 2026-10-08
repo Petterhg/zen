@@ -14,6 +14,19 @@ export function patchRuntimeLayout(resources) {
     resources,
     "out/vs/workbench/workbench.desktop.main.js",
   );
+  const mainFile = path.join(resources, "out/main.js");
+  replace(
+    mainFile,
+    'this._win=new Vi.BrowserWindow(Ee),Ge("code/didCreateCodeBrowserWindow")',
+    'this._win=new Vi.BrowserWindow(Ee),process.platform==="darwin"&&this._win.setWindowButtonVisibility(false),Ge("code/didCreateCodeBrowserWindow")',
+    'process.platform==="darwin"&&this._win.setWindowButtonVisibility(false)',
+  );
+  replace(
+    file,
+    'getHeight(i){return 22}getTemplateId(i){return"FileStat"}',
+    'getHeight(i){return 28}getTemplateId(i){return"FileStat"}',
+    'getHeight(i){return 28}getTemplateId(i){return"FileStat"}',
+  );
   const helper = transformSync(
     readFileSync(
       new URL("./native-layout.ts", import.meta.url),
@@ -83,6 +96,21 @@ export function patchRuntimeLayout(resources) {
   );
 }
 export function patchSourceLayout(source) {
+  replace(
+    path.join(source, "src/vs/platform/windows/electron-main/windowImpl.ts"),
+    "this._win = new electron.BrowserWindow(options);",
+    'this._win = new electron.BrowserWindow(options);\n\t\t\tif (process.platform === "darwin") this._win.setWindowButtonVisibility(false);',
+    "this._win.setWindowButtonVisibility(false)",
+  );
+  replace(
+    path.join(
+      source,
+      "src/vs/workbench/contrib/files/browser/views/explorerViewer.ts",
+    ),
+    "static readonly ITEM_HEIGHT = 22;",
+    "static readonly ITEM_HEIGHT = 28; // zen-explorer-spacing",
+    "// zen-explorer-spacing",
+  );
   const partFile = path.join(source, "src/vs/workbench/browser/part.ts");
   const partText = readFileSync(partFile, "utf8");
   if (!partText.includes("import { zenLayoutPart }"))

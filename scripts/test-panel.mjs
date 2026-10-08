@@ -200,14 +200,18 @@ try {
     await page.locator("#taskIntentText").textContent(),
     "Explain the <script>retry</script> function before we change it.",
   );
-  // Narrow companion layout: pairing precedes settings and index status stays at the bottom.
+  // The uncluttered workboard shows voice and assistance; diagnostics/configuration are opt-in.
   await page.setViewportSize({ width: 325, height: 900 });
   await page.evaluate(() => {
     document.getElementById("pairingSettings").open = false;
   });
   const voiceBox = await page.locator(".voice-card").boundingBox();
-  const indexBox = await page.locator(".code-index").boundingBox();
-  assert.ok(voiceBox && indexBox && voiceBox.y < indexBox.y);
+  const sliderBox = await page.locator(".pairing-style").boundingBox();
+  assert.ok(voiceBox && sliderBox && voiceBox.y < sliderBox.y);
+  assert.equal(await page.locator(".code-index").isVisible(), false);
+  assert.equal(await page.locator("#composer").isVisible(), false);
+  assert.equal(await page.locator("#connect").count(), 1);
+  assert.equal(await page.locator("#foldWorkboard").count(), 0);
   assert.equal(
     await page.evaluate(() => document.body.scrollWidth > window.innerWidth),
     false,
@@ -242,7 +246,7 @@ try {
     stopped: window.tracks.filter((track) => track.stopped).length,
   }));
   await page.locator("#switchTheme").click();
-  await page.locator("#foldWorkboard").click();
+
   await page.locator("#toggleSettings").click();
   await page.locator("#toggleSettings").click();
   await page.locator("#manageMemory").click();
@@ -285,11 +289,8 @@ try {
       window.messages.some((m) => m.type === "toggleTheme"),
     ),
   );
-  assert.ok(
-    await page.evaluate(() =>
-      window.messages.some((m) => m.type === "toggleWorkboard"),
-    ),
-  );
+  // Folding is now tested at the native title-bar command boundary.
+  assert.equal(await page.locator("#foldWorkboard").count(), 0);
   await page.evaluate(() =>
     window.host({
       type: "liveAppend",

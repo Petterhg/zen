@@ -467,7 +467,7 @@
   // Appearance and folding never touch the transport, microphone or backend job.
   for (const [id, type] of [
     ["switchTheme", "toggleTheme"],
-    ["foldWorkboard", "toggleWorkboard"],
+
     ["applyLayout", "applyLayout"],
     ["manageMemory", "manageMemory"],
     ["resumePairing", "resumePairing"],
@@ -511,9 +511,7 @@
     ];
     $("assistanceLabel").textContent = labels[band];
     $("assistanceLevel").setAttribute("aria-valuetext", labels[band]);
-    $("assistanceDescription").textContent =
-      descriptions[band] +
-      (level > 0 ? ` Up to ${level * 10} changed lines per preview.` : "");
+    $("assistanceDescription").textContent = descriptions[band];
   }
   $("assistanceLevel").addEventListener("input", () =>
     showAssistance(Number($("assistanceLevel").value)),

@@ -6,7 +6,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
   await page.setContent(
-    '<main class="monaco-workbench"><div class="editor"></div><div class="panel"></div><div id="title"></div></main>',
+    '<main><div class="titlebar"></div><div class="editor"></div><div class="panel"></div></main>',
   );
   await page.addScriptTag({
     content: (
@@ -20,117 +20,89 @@ try {
     ).code,
   });
   const result = await page.evaluate(async () => {
-    const values = {
-      "zen.available": true,
-      "zen.voiceState": "disconnected",
-      "zen.assistanceLevel": 25,
-    };
-    const commands = [];
-    let listener;
-    let bottom = true;
-    const disposables = [];
-    const context = {
-      getContextKeyValue: (key) => values[key],
-      onDidChangeContext: (fn) => {
-        listener = fn;
-        return {
-          dispose() {
-            listener = undefined;
-          },
-        };
-      },
-    };
+    let listener,
+      visible = true;
+    const commands = [],
+      disposables = [];
     const part = (selector) => ({
       getContainer: () => document.querySelector(selector),
-      contextKeyService: context,
-      layoutService: { isVisible: () => bottom, getPanelPosition: () => 2 },
+      contextKeyService: {
+        onDidChangeContext: (fn) => {
+          listener = fn;
+          return {
+            dispose() {
+              listener = undefined;
+            },
+          };
+        },
+      },
+      layoutService: { isVisible: () => visible },
       instantiationService: {
         invokeFunction: (fn) =>
           fn({
-            get: () => ({ executeCommand: async (id) => commands.push(id) }),
+            get: () => ({
+              executeCommand: async (id) => {
+                commands.push(id);
+                visible = !visible;
+              },
+            }),
           }),
       },
       _register: (d) => disposables.push(d),
     });
-    const editor = part(".editor"),
-      panel = part(".panel");
+    const title = part(".titlebar");
     const sizes = [
-      zenLayoutPart(editor, 900, 600, "commands"),
-      zenLayoutPart(panel, 900, 210, "commands"),
+      zenLayoutPart(title, 900, 54, "commands"),
+      zenLayoutPart(part(".editor"), 900, 600, "commands"),
+      zenLayoutPart(part(".panel"), 900, 210, "commands"),
     ];
-    const strip = document.querySelector(".zen-pairing-strip");
-    const initialParent = strip.parentElement.className;
-    strip.querySelector("button").click();
-    values["zen.voiceState"] = "listening";
+    zenLayoutPart(title, 900, 54, "commands");
+    const button = document.querySelector(".zen-workboard-toggle");
+    const initial = button.getAttribute("aria-expanded");
+    button.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    const folded = button.getAttribute("aria-expanded");
+    visible = true;
     listener();
-    strip.querySelector("button").click();
-    values["zen.voiceState"] = "muted";
-    listener();
-    const muted = strip.querySelector("button").textContent;
-    strip.querySelectorAll("button")[1].click();
-    values["zen.assistanceLevel"] = 0;
-    listener();
-    const label = strip.querySelectorAll("button")[3].textContent;
-    bottom = false;
-    sizes.push(zenLayoutPart(editor, 360, 500, "commands"));
-    const folded = {
-      parent: strip.parentElement.className,
-      count: document.querySelectorAll(".zen-pairing-strip").length,
-      compact: strip.classList.contains("compact"),
-    };
-    values["zen.available"] = false;
-    listener();
-    const disabled = strip.querySelector("button").disabled;
+    const restored = button.getAttribute("aria-expanded");
+    const count = document.querySelectorAll("button").length;
     const group = {
       element: document.createElement("div"),
       titleContainer: document.createElement("div"),
       editorContainer: document.createElement("div"),
-      activeEditor: {
-        getName: () => "<unsafe>.ts",
-        getDescription: () => "/sample",
-      },
-      _register: (d) => disposables.push(d),
     };
+    group.element.innerHTML =
+      '<section class="zen-file-heading">Old duplicate heading</section>';
     group.element.append(group.titleContainer, group.editorContainer);
-    document.body.append(group.element);
     zenLayoutGroup(group, 900, 600);
-    group.activeEditor = {
-      getName: () => "next.ts",
-      getDescription: () => "/next",
-    };
-    group.titleContainer.textContent = "next tab";
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const heading = group.element.querySelector("h2").textContent;
+    const heading = group.element.querySelector(".zen-file-heading");
     disposables.forEach((d) => d.dispose());
     return {
       sizes,
-      initialParent,
-      commands,
-      muted,
-      label,
+      initial,
       folded,
-      disabled,
-      heading,
-      remaining: document.querySelectorAll(".zen-pairing-strip").length,
+      restored,
+      count,
+      commands,
+      heading: !!heading,
+      width: group.titleContainer.style.width,
+      remaining: document.querySelectorAll("button").length,
     };
   });
   assert.deepEqual(result, {
-    sizes: [600, 166, 456],
-    initialParent: "panel",
-    commands: [
-      "pairCode.startVoice",
-      "pairCode.toggleVoiceMute",
-      "pairCode.endVoice",
-    ],
-    muted: "Unmute",
-    label: "Voice only ▾",
-    folded: { parent: "editor", count: 1, compact: true },
-    disabled: true,
-    heading: "next.ts",
+    sizes: [54, 600, 210],
+    initial: "true",
+    folded: "false",
+    restored: "true",
+    count: 1,
+    commands: ["pairCode.toggleWorkboard"],
+    heading: false,
+    width: "844px",
     remaining: 0,
   });
   console.log(
-    "Native helper tests passed: reserved geometry, fold/resize, voice state, command routing, heading refresh, disposal. Browser fixture, not native app proof.",
+    "Native helper fixture passed: one title toggle, fold state, full editor/terminal height, no duplicate heading, disposal.",
   );
 } finally {
   await browser.close();
