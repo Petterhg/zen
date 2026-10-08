@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zen — a little closer to the work</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="topbar">
+        <button class="wordmark" id="home" aria-label="Open project board">
+          <span class="enso"></span>zen
+        </button>
+        <span class="divider"></span
+        ><button class="project" id="projectBoard">
+          studio <span class="dim">/</span> platform
+          <span class="chevron">⌄</span>
+        </button>
+        <span class="prototype"
+          >INTERACTIVE STUDY <span>· integrations simulated</span></span
+        >
+        <div class="header-actions">
+          <button
+            class="icon-button"
+            id="commands"
+            title="Commands (⌘K)"
+            aria-label="Open commands"
+          >
+            <span data-icon="search"></span></button
+          ><button
+            id="collaborate"
+            class="people"
+            aria-label="Open pairing room"
+            title="Pairing room"
+          >
+            <span class="avatar">P</span
+            ><span id="peerAvatar" class="avatar peer" hidden>M</span
+            ><span class="invite-icon">+</span></button
+          ><button
+            id="focus"
+            class="icon-button"
+            title="Focus mode (⌘⇧F)"
+            aria-label="Toggle focus mode"
+          >
+            <span data-icon="focus"></span></button
+          ><button id="toggleBoard" class="quiet-button" aria-expanded="true">
+            <span data-icon="panel"></span> Workboard
+          </button>
+        </div>
+      </header>
+      <div class="workspace">
+        <aside class="files" id="files" aria-label="File explorer">
+          <div class="section-label">
+            EXPLORER
+            <button
+              class="icon-button small"
+              id="hideFiles"
+              aria-label="Hide files"
+            >
+              <span data-icon="left"></span>
+            </button>
+          </div>
+          <div class="repo-name">
+            <span data-icon="folder"></span> studio <span class="dim">⌄</span>
+          </div>
+          <div class="tree">
+            <div class="folder-row"><span class="dim">⌄</span> services</div>
+            <div class="folder-row indent">
+              <span class="dim">⌄</span> gateway
+            </div>
+            <div class="folder-row indent2"><span class="dim">⌄</span> src</div>
+            <div id="fileList"></div>
+            <div class="folder-row indent2">
+              <span class="dim">›</span> tests <span class="tree-count">3</span>
+            </div>
+            <div class="folder-row"><span class="dim">›</span> packages</div>
+            <div class="folder-row">
+              <span class="dim">›</span> infrastructure
+            </div>
+            <div class="root-file">
+              <span class="file-icon">M↓</span> README.md
+            </div>
+          </div>
+          <div class="explorer-bottom">
+            <span class="tiny-dot"></span> Demo index ready
+            <span class="dim">↗</span>
+            <p>Current files. Shared context.</p>
+          </div>
+        </aside>
+        <main class="main">
+          <div class="task-heading">
+            <div>
+              <button id="taskPicker" class="eyebrow task-id">
+                ZEN-142 <span>⌄</span>
+              </button>
+              <h1 id="taskTitle">Keep retries within the request deadline</h1>
+              <p id="taskSubtitle">
+                Gateway reliability <span>·</span> One task, from intent to
+                verified change.
+              </p>
+            </div>
+            <button
+              id="showFiles"
+              class="icon-button"
+              aria-label="Show files"
+              title="Show files"
+              hidden
+            >
+              <span data-icon="folder"></span>
+            </button>
+            <div class="task-state">
+              <span class="tiny-dot"></span
+              ><span id="stageLabel">In progress</span>
+            </div>
+          </div>
+          <div class="editor" id="editorShell">
+            <div
+              class="tabbar"
+              id="tabs"
+              role="tablist"
+              aria-label="Open files"
+            ></div>
+            <div class="breadcrumb">
+              services <span>›</span> gateway <span>›</span> src <span>›</span>
+              <span id="crumbFile">retry.ts</span
+              ><span class="editor-meta" id="editorMeta">TypeScript</span>
+            </div>
+            <div class="code-area">
+              <div
+                id="lineNumbers"
+                class="line-numbers"
+                aria-hidden="true"
+              ></div>
+              <div class="code-stack">
+                <pre id="highlight" aria-hidden="true"></pre>
+                <textarea
+                  id="code"
+                  spellcheck="false"
+                  aria-label="Demo code editor"
+                  wrap="off"
+                ></textarea>
+              </div>
+              <div id="collabCursor" class="collab-cursor" hidden>
+                Mira · reading with you
+              </div>
+            </div>
+            <div id="proposal" class="proposal" hidden>
+              <div class="proposal-head">
+                <span class="tiny-dot"></span
+                ><strong>Check cancellation before retrying</strong
+                ><span class="spacer"></span
+                ><button id="rejectEdit" class="text-button">Discard</button
+                ><button id="acceptEdit" class="primary small-primary">
+                  Accept <kbd>⌘↵</kbd>
+                </button>
+              </div>
+              <pre>+  signal?.throwIfAborted();</pre>
+              <p id="proposalNote">
+                One-line proposal · applied only to the unchanged source
+              </p>
+            </div>
+            <div class="editor-foot">
+              <span id="bufferStatus">Saved in this browser</span
+              ><button class="text-button" id="suggest">
+                <span data-icon="spark"></span> Try an inline suggestion
+              </button>
+            </div>
+          </div>
+          <section class="terminal" id="terminal" aria-label="Demo terminal">
+            <div class="terminal-head">
+              <button class="terminal-title" id="terminalTab">
+                <span data-icon="terminal"></span> Terminal
+                <span class="dim">zsh</span></button
+              ><span class="terminal-demo">SIMULATED SHELL</span
+              ><button class="text-button" id="runTests">
+                Run checks <span>↵</span></button
+              ><button
+                class="icon-button small"
+                id="hideTerminal"
+                aria-label="Hide terminal"
+              >
+                <span data-icon="down"></span>
+              </button>
+            </div>
+            <div class="terminal-output" id="terminalOutput" aria-live="polite">
+              <div>
+                <span class="term-path">studio/gateway</span>
+                <span class="term-branch">on zen/142-request-deadline</span>
+              </div>
+              <div><span class="term-prompt">❯</span> npm test -- retry</div>
+              <div class="term-success">
+                ✓ retry.test.ts
+                <span class="dim">3 tests passed · fixture result</span>
+              </div>
+            </div>
+            <form id="terminalForm" class="terminal-input">
+              <label for="terminalCommand">❯</label
+              ><input
+                id="terminalCommand"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Try npm test, git status, or clear"
+                aria-label="Simulated terminal command"
+              />
+            </form>
+          </section>
+          <div class="voicebar">
+            <button class="voice-button" id="voice">
+              <span data-icon="mic"></span
+              ><span id="voiceLabel">Resume pairing</span></button
+            ><span class="voice-caption" id="voiceCaption"
+              >Your place is saved with this task.</span
+            >
+            <div class="wave" id="wave" hidden>
+              <i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <span class="spacer"></span
+            ><button
+              id="toggleTerminal"
+              class="icon-button"
+              aria-label="Toggle terminal"
+              title="Terminal"
+            >
+              <span data-icon="terminal"></span></button
+            ><button
+              id="voiceSettings"
+              class="text-button"
+              title="Adjust assistance"
+            >
+              Guide me <span>⌄</span>
+            </button>
+          </div>
+        </main>
+        <aside class="workboard" id="workboard" aria-label="AI workboard">
+          <div class="board-heading">
+            <div>
+              <span class="eyebrow">YOUR PAIR</span>
+              <h2>A shared place to think.</h2>
+            </div>
+            <button
+              class="icon-button small"
+              id="hideBoard"
+              aria-label="Fold workboard"
+            >
+              <span data-icon="right"></span>
+            </button>
+          </div>
+          <div
+            class="board-tabs"
+            role="tablist"
+            aria-label="Workboard sections"
+          >
+            <button data-board="task" role="tab" aria-selected="true">
+              Task</button
+            ><button data-board="delivery" role="tab" aria-selected="false">
+              Delivery</button
+            ><button data-board="memory" role="tab" aria-selected="false">
+              Memory
+            </button>
+          </div>
+          <div class="board-scroll" id="boardContent"></div>
+          <div class="board-bottom">
+            <span class="tiny-dot hollow"></span
+            ><span>Context follows the task.</span
+            ><button
+              class="icon-button small"
+              id="sessionHistory"
+              aria-label="Open task session history"
+            >
+              <span data-icon="history"></span>
+            </button>
+          </div>
+        </aside>
+      </div>
+      <footer class="statusbar">
+        <button id="branchButton">
+          <span data-icon="branch"></span
+          ><span id="branchName">zen/142-request-deadline</span></button
+        ><span class="status-separator">/</span
+        ><span id="changedStatus">No uncommitted changes</span
+        ><span class="spacer"></span
+        ><span id="storageStatus"
+          >Local demo · no microphone or cloud connection</span
+        ><button
+          id="themeToggle"
+          title="Switch light and dark appearance"
+          aria-label="Switch color theme"
+        >
+          <span data-icon="sun"></span>
+        </button>
+      </footer>
+    </div>
+    <dialog id="modal">
+      <div class="modal-top">
+        <div>
+          <span class="eyebrow" id="modalEyebrow">PROJECT</span>
+          <h2 id="modalTitle">One thing at a time.</h2>
+        </div>
+        <button id="closeModal" class="icon-button" aria-label="Close dialog">
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <div id="modalBody"></div>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

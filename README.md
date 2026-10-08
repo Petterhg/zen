@@ -31,6 +31,12 @@ Use the **Inline suggestions** control to choose Off, On request (default), or A
 
 To explore an existing service, say “Explore `services/ner`: trace its entrypoints, extraction flow and callers, and tell me what remains unchecked.” Pair delegates research to a separate context. The explorer starts with that directory and follows relevant references outward; the main conversation receives a compact findings report with file/line evidence. Repository exploration uses local tools by default. Ask explicitly for external documentation when you also want web research. Exploration proposes no edits; request an implementation separately. Known files can be read in batches, and native text search overlays unsaved buffers. Compact explorer findings stay available within the voice session and are marked stale after edits. Changing the assistance slider preserves ongoing research and waits for quiet playback before updating the speaker; the new local setting applies immediately.
 
+## Zen workbench design preview
+
+Try the next UI direction with `npm ci` and `npm run prototype:zen`, then open <http://127.0.0.1:4317>. It is a separate browser prototype: calm light/dark styling, a folding file tree/terminal/workboard, editable sample code, local task checkpoints and an issue-to-verification walkthrough. It does not change your running editor.
+
+Voice, integrations, terminal results and collaboration are simulated. [Research, interaction guide and native implementation plan](docs/zen-workbench.md) distinguish what works locally from the proposed production design.
+
 ## Features
 
 These features are implemented in the prototype; this is not a production-readiness checklist. The development runtime currently targets macOS on Apple Silicon.
@@ -65,6 +71,13 @@ Ordered by current priority, not promised release dates. Completed work moves in
 - [ ] **Close the validation loop.** After human edits or accepted proposals, inspect diagnostics and support explicitly authorized formatter/test execution with concise, truthful results.
 
 Milestone acceptance: demonstrate this interaction on an existing service at voice-only and assisted-edit settings; preserve the requested target through tab changes, reject stale edits, keep typing/slider updates from interrupting speech, and report what was actually verified. Record offline checks separately from real provider and human voice validation.
+
+### Task workspace and collaboration
+
+- [ ] Bring the [Zen workbench design study](docs/zen-workbench.md) into the native editor: calm theme, reduced chrome, folding workboard and persistent voice controls. The browser example is an interaction prototype only.
+- [ ] Persist task-linked session checkpoints, decisions and checkout context; resume after restart without automatically starting the microphone.
+- [ ] Connect Linear issues to GitHub PR/review/CI evidence and AWS/GCP deployment/integration results, tied to the exact revision and explicit action permissions.
+- [ ] Add shared task rooms, then concurrent editing and coordinated multi-person voice pairing with the AI. Independent navigation and opt-in following come first.
 
 ### Later
 
