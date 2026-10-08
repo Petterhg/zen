@@ -66,9 +66,23 @@ Ordered by current priority, not promised release dates. Completed work moves in
 
 Milestone acceptance: demonstrate this interaction on an existing service at voice-only and assisted-edit settings; preserve the requested target through tab changes, reject stale edits, keep typing/slider updates from interrupting speech, and report what was actually verified. Record offline checks separately from real provider and human voice validation.
 
+### Proposed: durable project and personal memory
+
+- [ ] **Pilot optional memory behind a provider adapter**, with [Hindsight](https://github.com/vectorize-io/hindsight) as a candidate rather than a committed dependency. Start with explicit “remember this,” project decisions with rationale, and a short session-resume brief. No memory service is implemented or enabled yet.
+
+Potential implementation:
+
+- Keep current source retrieval in Turso and live cursor/buffer state in the editor. Durable memory holds preferences, decisions, verified findings and unfinished work, with separate personal and shared project scopes.
+- Call the memory provider from the extension host through its TypeScript client or HTTP API. Recall relevant evidence alongside code search; retain compact outcome records asynchronously. Keep memory failures and slow reflection off the speech-critical path.
+- Store source/commit references and distinguish proposed, accepted and verified outcomes. Revalidate code-related memories against current files; current user instructions and repository rules take precedence over inferred memories.
+- Provide inspect, correct, forget and disable controls. Choose storage/inference destinations explicitly; local hosting does not imply local model inference. Do not ingest raw transcripts or private code automatically as part of the pilot.
+- Evaluate a separately hosted Hindsight service first; it has its own database/model dependencies and does not replace our embedded Turso index. Background project summaries are a possible later optimization.
+
+Acceptance: a new session recalls a relevant decision, respects a correction/deletion, avoids cross-project or cross-user leakage, and remains usable when memory is unavailable. Measure recall usefulness, added latency and model cost before making it a default feature.
+
 ### Later
 
-- [ ] Persistent project knowledge with source/version tracking and invalidation.
+- [ ] Extend the memory pilot to maintained project summaries with source/version tracking and invalidation.
 - [ ] MCP and third-party tool integrations with clear permissions.
 - [ ] Parallel exploration for broad, independent research where measurements justify the added complexity.
 - [ ] Retrieval scaling and additional language-aware chunking based on evaluation results.
