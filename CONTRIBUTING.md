@@ -17,9 +17,9 @@ Each developer supplies their own API keys through Add API Keys, or copies `.env
 
 ## Work together
 
-Use one short-lived branch per task (`cursor/describe-change` is the agent default), and a separate worktree for concurrently running coding agents. Do not have two agents write the same checkout. Agree on the behavior and affected area in the issue or PR; a short paragraph and observable acceptance criteria are enough. No mandatory specification or test-first ceremony.
+For the current small-team workflow, commit validated changes and push directly to `main`. PRs are optional: create one when the user asks for review through GitHub. Fetch current main before pushing, integrate concurrent changes, and never force-push main.
 
-Open a small PR against `main`. Include the problem, resulting behavior, checks actually run, and remaining limitations. Have the other developer review it, then squash merge after CI passes. Update your branch from main before resolving conflicting changes. Agents may prepare commits and PRs when requested; merging and release publication need human authorization. Branch protection is recommended but is not configured by this repository.
+Use a separate branch/worktree for concurrently running coding agents; do not have two agents write the same checkout. Agree on the behavior and affected area in the task. A short paragraph and observable acceptance criteria are enough; no mandatory specification or test-first ceremony. Report the resulting behavior, checks actually run, and remaining limitations with each handoff. Release publication and deployment still need human authorization.
 
 ## Local checks
 

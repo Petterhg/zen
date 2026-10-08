@@ -133,4 +133,4 @@ Initial indexing runs in the background and results can be partial. One editor p
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the two-person PR workflow, [AGENTS.md](AGENTS.md) for agent instructions, and [agent development](docs/agent-development.md) for skills and specialist roles. MIT licensed; see [third-party notices](THIRD_PARTY_NOTICES.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the current direct-to-main workflow, [AGENTS.md](AGENTS.md) for agent instructions, and [agent development](docs/agent-development.md) for skills and specialist roles. MIT licensed; see [third-party notices](THIRD_PARTY_NOTICES.md).
