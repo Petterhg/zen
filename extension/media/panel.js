@@ -469,6 +469,8 @@
     ["foldWorkboard", "toggleWorkboard"],
     ["applyLayout", "applyLayout"],
     ["manageMemory", "manageMemory"],
+    ["resumePairing", "resumePairing"],
+    ["freshPairing", "freshPairing"],
   ]) {
     $(id).addEventListener("click", () => post({ type }));
   }
@@ -619,6 +621,20 @@
       pending.delete(data.id);
       if (data.error) entry.reject(new Error(data.error));
       else entry.resolve(data.result);
+    }
+    if (data.type === "checkpointLoaded") {
+      $("checkpointNote").textContent =
+        "Previous pairing loaded" +
+        (data.fileChanged ? " · file changed; recheck needed" : "") +
+        ": " +
+        String(data.task).slice(0, 120) +
+        (String(data.task).length > 120 ? "…" : "");
+      $("checkpointNote").title = String(data.task);
+      $("checkpointNote").classList.remove("hidden");
+    }
+    if (data.type === "checkpointCleared") {
+      $("checkpointNote").textContent = "";
+      $("checkpointNote").classList.add("hidden");
     }
     if (data.type === "configuration") {
       openaiReady = data.openaiReady;

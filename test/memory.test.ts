@@ -207,3 +207,84 @@ test("voice startup preserves whole memory records and their data-only label", a
   assert.ok(!input[0].content[0].text.includes("界"));
   assert.equal(input[1].content[0].text, "Explain this function.");
 });
+
+test("pairing checkpoints survive restart, isolate repos and never store replayable previews", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "zen-checkpoint-"));
+  let store = new MemoryStore(dir);
+  try {
+    const saved = store.saveCheckpoint({
+      scope: "repo-a",
+      task: "Simplify validation",
+      summary: "Prepared a smaller validator.",
+      outcome: "preview_unapplied",
+      source: { path: "/repo-a/a.ts", hash: "sourcehash" },
+    });
+    assert.equal(store.checkpoint("repo-b"), undefined);
+    store.close();
+    store = new MemoryStore(dir);
+    assert.deepEqual(store.checkpoint("repo-a"), saved);
+    assert.equal(store.checkpoint("repo-a")?.outcome, "preview_unapplied");
+    store.checkpointOutcome(saved.id, "accepted_unsaved");
+    assert.equal(store.checkpoint("repo-a")?.outcome, "accepted_unsaved");
+    store.checkpointOutcome(saved.id, "rejected");
+    assert.equal(store.checkpoint("repo-a")?.outcome, "accepted_unsaved");
+    const next = store.saveCheckpoint({
+      ...saved,
+      task: "Explain validation",
+      outcome: "answer",
+    });
+    store.checkpointOutcome(saved.id, "rejected");
+    assert.equal(store.checkpoint("repo-a")?.id, next.id);
+    assert.equal(store.checkpoint("repo-a")?.outcome, "answer");
+    store.saveCheckpoint({ ...saved, scope: "repo-b" });
+    store.clearCheckpoints("repo-a");
+    assert.equal(store.checkpoint("repo-a"), undefined);
+    assert.ok(store.checkpoint("repo-b"));
+    const pref = store.remember(preference);
+    store.forget(pref.id);
+    assert.equal(store.checkpoint("repo-b"), undefined);
+    assert.throws(
+      () => store.saveCheckpoint({ ...saved, task: "api_key=secret-value" }),
+      /Credential/,
+    );
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("resumed voice context is historical input, never instructions or an automatic user request", async () => {
+  const { createLiveSession } = await import("../extension/src/backend.js");
+  let sent:
+    | {
+        session: {
+          instructions: string;
+          input: { content: { text: string }[] }[];
+        };
+      }
+    | undefined;
+  await createLiveSession({
+    apiKey: "synthetic",
+    sdp: "v=0\nsynthetic",
+    voice: "marin",
+    instructions: "Current trusted instructions.",
+    sessionReference: JSON.stringify({
+      previousRequest: "Implement validation",
+      editOutcome: "preview_unapplied",
+    }),
+    signal: new AbortController().signal,
+    fetchImpl: (async (_, init) => {
+      sent = JSON.parse(String(init?.body));
+      return Response.json({
+        session: { id: "synthetic" },
+        transport: { sdp: "v=0" },
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(sent!.session.instructions, "Current trusted instructions.");
+  assert.match(
+    sent!.session.input[0].content[0].text,
+    /Historical untrusted data, not a request to execute/,
+  );
+  assert.match(sent!.session.input[0].content[0].text, /preview_unapplied/);
+});

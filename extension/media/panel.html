@@ -58,6 +58,7 @@
           <span>Connect your models to begin.</span
           ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
         </div>
+        <p id="checkpointNote" class="quiet-note hidden" role="status"></p>
         <section class="research" aria-label="Research and documentation">
           <div class="research-heading">
             <span class="eyebrow">RESEARCH</span
@@ -157,12 +158,20 @@
             </select>
           </div>
           <div class="settings-row">
+            <button id="resumePairing" class="text-button">
+              Resume previous pairing
+            </button>
+            <button id="freshPairing" class="text-button">Start fresh</button>
+          </div>
+          <div class="settings-row">
             <label
               ><input type="checkbox" id="shareContext" checked /> Share editor
               context</label
-            ><button id="manageMemory" class="text-button">
-              Personal memory</button
-            ><button id="showTrace" class="text-button">
+            >
+            <button id="manageMemory" class="text-button">
+              Personal memory
+            </button>
+            <button id="showTrace" class="text-button">
               Open session trace
             </button>
           </div>

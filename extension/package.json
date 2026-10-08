@@ -89,6 +89,14 @@
       {
         "command": "pairCode.manageMemory",
         "title": "Zen: Manage Personal Memory"
+      },
+      {
+        "command": "pairCode.resumePairing",
+        "title": "Zen: Resume Previous Pairing"
+      },
+      {
+        "command": "pairCode.freshPairing",
+        "title": "Zen: Start Fresh Pairing"
       }
     ],
     "keybindings": [

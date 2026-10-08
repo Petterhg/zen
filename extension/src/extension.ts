@@ -87,6 +87,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private researchBriefs = new ResearchBriefs();
   private codeIndex: IndexService;
   private memory: PersonalMemory;
+  private resumedCheckpoint?: { scope: string; id: string };
+  private proposalCheckpointId?: string;
   private inlineJob?: AbortController;
   private backendRunning = false;
   private activeDelegation?: string;
@@ -376,7 +378,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           ) {
             this.reject();
             this.focus = new FocusTimeline();
-            this.history.entries = [];
+            this.invalidateMemoryContext();
             this.researchBriefs.clear();
             this.post({ type: "stopVoice" });
           }
@@ -757,6 +759,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           "toggleWorkboard",
           "applyLayout",
           "manageMemory",
+          "resumePairing",
+          "freshPairing",
         ].includes(message.type)
       ) {
         await vscode.commands.executeCommand(`pairCode.${message.type}`);
@@ -935,6 +939,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           "coding preferences explanation pace",
           await this.memory.scope(startupContext?.uri),
         );
+        const resumed = await this.resumeReference(
+          await this.memory.scope(startupContext?.uri),
+        );
         const result = await createLiveSession({
           apiKey: key,
           sdp: message.params.sdp,
@@ -945,6 +952,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           ),
           editorContext: editorVoiceContext(startupContext),
           history: previousHistory,
+          sessionReference: resumed,
           memory: startupMemories.map((r) => ({ kind: r.kind, text: r.text })),
           signal: this.sessionJob.signal,
         });
@@ -1161,6 +1169,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
         taskState: {
           personalMemory: memoryReference,
+          previousPairing: await this.resumeReference(memoryScope),
           researchReference: this.researchBriefs.snapshot(),
           lastEditEvent: this.lastEditEvent,
           pendingPreview: this.proposal
@@ -1311,8 +1320,34 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         speech: result.speech,
         edits: result.edits.length,
       });
+      const checkpointId =
+        result.status === "cancelled"
+          ? undefined
+          : await this.memory.saveCheckpoint(
+              memoryScope,
+              latestHuman,
+              result.summary,
+              proposal
+                ? "preview_unapplied"
+                : result.status === "clarification"
+                  ? "clarification"
+                  : "answer",
+              context?.uri,
+              controller.signal,
+            );
+      if (
+        controller.signal.aborted ||
+        revision !== this.jobRevision ||
+        token !== this.sessionToken
+      )
+        return;
+      if (checkpointId) {
+        this.resumedCheckpoint = undefined;
+        this.post({ type: "checkpointCleared" });
+      }
       if (proposal) {
         this.reject(false);
+        this.proposalCheckpointId = checkpointId;
         this.proposal = proposal;
         void vscode.commands.executeCommand(
           "setContext",
@@ -1415,7 +1450,95 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       }
     }
   }
+  private async resumeReference(
+    scope: string | undefined,
+  ): Promise<string | undefined> {
+    const selected = this.resumedCheckpoint;
+    if (!scope || selected?.scope !== scope) return;
+    const checkpoint = await this.memory.checkpoint(scope);
+    if (
+      !checkpoint ||
+      this.resumedCheckpoint !== selected ||
+      checkpoint.id !== selected.id
+    )
+      return;
+    return JSON.stringify({
+      previousRequest: checkpoint.task,
+      previousResult: checkpoint.summary,
+      editOutcome: checkpoint.outcome,
+      recordedAt: checkpoint.updated,
+      file: checkpoint.source?.path,
+      fileChanged: checkpoint.fileChanged,
+      instructionBoundary:
+        "Historical reference only. Re-read current code. No old task is authorized to run, no preview is restored, accepted_unsaved is a historical buffer event, not proof of saved work or tests. Ask what to continue if unclear. Current instructions win.",
+    });
+  }
+  async resumePairing(): Promise<void> {
+    if (
+      (this.sessionJob && !this.sessionJob.signal.aborted) ||
+      this.backendRunning
+    ) {
+      await vscode.window.showInformationMessage(
+        "Disconnect pairing and finish or cancel the current request before resuming another session.",
+      );
+      return;
+    }
+    const token = this.sessionToken,
+      revision = this.jobRevision;
+    const scope = await this.memory.scope(this.snapshot()?.uri);
+    const checkpoint = await this.memory.checkpoint(scope);
+    if (token !== this.sessionToken || revision !== this.jobRevision) return;
+    if (!checkpoint || !scope) {
+      await vscode.window.showInformationMessage(
+        "No available checkpoint for this repository. Check memory/context sharing and the current file.",
+      );
+      return;
+    }
+    this.cancel();
+    this.history.entries = [];
+    this.researchBriefs.clear();
+    this.lastEditEvent = undefined;
+    this.focus = new FocusTimeline();
+    this.reject(false);
+    this.resumedCheckpoint = { scope, id: checkpoint.id };
+    this.post({
+      type: "checkpointLoaded",
+      task: checkpoint.task,
+      fileChanged: checkpoint.fileChanged,
+    });
+    await vscode.window.showInformationMessage(
+      "Previous pairing context loaded. Start Pairing or type what to continue. Current code will be checked again.",
+    );
+  }
+  async freshPairing(): Promise<void> {
+    const scope = await this.memory.scope(this.snapshot()?.uri);
+    if (!scope) {
+      await vscode.window.showInformationMessage(
+        "Open a file in the repository whose checkpoint you want to clear.",
+      );
+      return;
+    }
+    this.memory.clearCheckpoints(scope);
+    this.resumedCheckpoint = undefined;
+    this.cancel();
+    this.sessionJob?.abort();
+    this.sessionToken++;
+    this.history.entries = [];
+    this.researchBriefs.clear();
+    this.lastEditEvent = undefined;
+    this.focus = new FocusTimeline();
+    this.reject(false);
+    this.post({ type: "stopVoice" });
+    this.post({ type: "checkpointCleared" });
+  }
   private invalidateMemoryContext(): void {
+    this.resumedCheckpoint = undefined;
+    try {
+      this.memory.clearCheckpoints();
+    } catch {
+      /* Privacy cancellation must still proceed. Status reports persistence failure. */
+    }
+    this.post({ type: "checkpointCleared" });
     this.cancel();
     this.sessionJob?.abort();
     this.sessionToken++;
@@ -1525,6 +1648,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.finishAcceptance();
   }
   private finishAcceptance(): void {
+    this.memory.checkpointOutcome(
+      this.proposalCheckpointId,
+      "accepted_unsaved",
+    );
     this.lastEditEvent = {
       status: "accepted_unsaved",
       file: this.proposal?.uri,
@@ -1595,6 +1722,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   reject(notify = true): void {
     if (notify && this.proposal) {
+      this.memory.checkpointOutcome(this.proposalCheckpointId, "rejected");
       this.lastEditEvent = { status: "rejected", file: this.proposal.uri };
       this.history.entries.push({
         role: "assistant",
@@ -1611,6 +1739,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       });
     }
     this.proposal = undefined;
+    this.proposalCheckpointId = undefined;
     this.renderProposal();
     this.scheduleContext();
     void vscode.commands.executeCommand("editor.action.inlineSuggest.hide");
@@ -1692,6 +1821,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     vscode.window.registerWebviewViewProvider("pairCode.companion", companion, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    vscode.commands.registerCommand("pairCode.resumePairing", () =>
+      companion.resumePairing(),
+    ),
+    vscode.commands.registerCommand("pairCode.freshPairing", () =>
+      companion.freshPairing(),
+    ),
     vscode.commands.registerCommand("pairCode.manageMemory", () =>
       companion.manageMemory(),
     ),

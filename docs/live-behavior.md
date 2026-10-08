@@ -191,3 +191,7 @@ Validation: type checking, lint, all 60 regression tests, build and simulated pa
 ## Personal memory
 
 Relevant local memories are untrusted reference data, supplied at voice startup and in backend task state. Normal recall does not wait for Hindsight, and background retention never sends a speaking append. Explicit memory privacy actions clear current conversation context and end the voice session; ordinary memory collection, settings-panel opening, typing and assistance changes do not. Current human instructions and current source win. Read [personal-memory.md](personal-memory.md) for scope, freshness, evidence, forget and hosted-processing boundaries.
+
+## Resuming individual pairing
+
+A completed backend result checkpoints a bounded request excerpt, result summary and historical edit status in the private memory journal, scoped to the repository checkout. Resume is explicit through Pairing settings/commands. The host supplies the checkpoint as untrusted previous-pairing reference data at the next voice startup and backend request, never as an executable user turn or privileged instructions. The microphone still requires Start Pairing. Source revalidation excludes unavailable/private targets and marks changed buffers; historical acceptance is not proof of saved or tested code. Fresh pairing clears transient task context and the repository checkpoint, while privacy changes clear all local checkpoints. The checkpoint is not indexed into Hindsight. See [personal memory](personal-memory.md#resume-a-pairing-session).

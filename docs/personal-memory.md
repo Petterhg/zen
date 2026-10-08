@@ -8,6 +8,18 @@ Open **Pairing settings → Personal memory**, or **Zen: Manage Personal Memory*
 
 Relevant records are supplied as reference data to backend requests and voice-session startup. Current requests, repository conventions and current code take precedence. Routine memory work never appends speaking instructions or restarts/interferes with an active voice turn. A privacy action (pause, correction or forgetting) deliberately ends the current voice session and clears in-memory conversation context so previously injected recollections are not reused. Start Pairing again afterwards.
 
+## Resume a pairing session
+
+After a completed backend request, Zen saves one compact checkpoint for that repository: a bounded request excerpt, the result summary, time, target file/hash when available and an application-confirmed edit outcome. Checkpoints live in the same private local journal as memory, with at most 30 repository checkpoints. They are not sent to Hindsight or retained as long-term preferences. They contain no executable edit payload, audio or full transcript.
+
+After reopening Zen, open **Pairing settings → Resume previous pairing**, or **Zen: Resume Previous Pairing**. Open a file in the intended repository first when the workspace has several roots. Resume loads historical reference data; you still click **Start Pairing** or type a current request such as “continue.” It neither turns on the microphone nor executes the old request. An active voice session/backend request must finish or disconnect before loading a different checkpoint.
+
+The target file is checked against the current buffer and workspace exclusions. Changed files produce a “recheck needed” note; deleted, ignored, private or unavailable targets cannot supply resume context. The assistant must re-read relevant code even when the target hash matches: this is not a dependency snapshot. `preview_unapplied` never means an edit happened. `accepted_unsaved` records a past editor-buffer event, not proof that the file remains changed, was saved, or passed tests. Old inline previews are never restored.
+
+**Start fresh** ends the current voice/backend work, discards its inline preview and transient conversation/research context, and removes the selected repository checkpoint. Long-term preferences remain. Memory pause, correction or forgetting clears checkpoints across the local profile to prevent old session context from restoring forgotten information; sharing-off also clears them. Existing diagnostic traces remain separate. Storage failure is reported through Memory status and does not prevent privacy cancellation.
+
+This first version checkpoints completed backend results, not every spoken utterance or an interrupted model request. It does not yet summarize a full session's decisions, unresolved questions or next steps. A truncated request excerpt is historical context, never a complete task specification; the assistant should clarify ambiguous continuation requests.
+
 ## Optional local Hindsight
 
 Install [uv](https://docs.astral.sh/uv/), then from the Zen checkout:
@@ -46,10 +58,10 @@ Semantic recall ranks only current canonical document IDs. Zen never forwards ar
 
 ## Still planned
 
-Resumable session checkpoints, service-level scope identities across checkouts, multi-window memory ownership, automatic daemon supervision, broader natural-language correction/deletion, quality/cost measurement, and human voice-session evaluation remain follow-up work. There is no cross-device sync, colleague access, issue-board dependency or inferred global skill score.
+Richer session checkpoints, service-level scope identities across checkouts, multi-window memory ownership, automatic daemon supervision, broader natural-language correction/deletion, quality/cost measurement, and human voice-session evaluation remain follow-up work. There is no cross-device sync, colleague access, issue-board dependency or inferred global skill score.
 
 API contracts: [Hindsight retain](https://hindsight.vectorize.io/developer/api/retain), [recall](https://hindsight.vectorize.io/developer/api/recall), [local authentication](https://hindsight.vectorize.io/developer/extensions), [configuration](https://hindsight.vectorize.io/developer/configuration), and [OpenAI Live client delegation](https://developers.openai.com/api/docs/guides/live-delegation).
 
 ## Validation record (2026-10-08)
 
-The offline suite covers journal restart, corrections, failed-write rollback, evidence tombstones, repository separation, ignored paths, dirty-buffer invalidation, pause, operation polling and bounded voice-startup reference serialization. A live synthetic run against local Hindsight 0.10.2 passed authenticated retention, semantic recall, correction and confirmed document deletion using the existing Cerebras and OpenAI keys. No private source or transcripts were used. Hindsight's operation lookup returns HTTP 200 with `status: "not_found"` for a new operation; the adapter handles that as a submission opportunity, not a pending job. Human microphone behavior and the quality of automatic preference collection still need a pairing session.
+The offline suite covers journal restart, corrections, failed-write rollback, evidence tombstones, repository separation, ignored paths, dirty-buffer invalidation, pause, operation polling bounded voice-startup reference serialization, checkpoint restart/isolation, historical edit outcomes, private-source exclusion and reference-only resume inputs. A live synthetic run against local Hindsight 0.10.2 passed authenticated retention, semantic recall, correction and confirmed document deletion using the existing Cerebras and OpenAI keys. No private source or transcripts were used. Hindsight's operation lookup returns HTTP 200 with `status: "not_found"` for a new operation; the adapter handles that as a submission opportunity, not a pending job. Human microphone behavior and the quality of automatic preference collection still need a pairing session.

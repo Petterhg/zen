@@ -10,6 +10,7 @@ import {
   rankMemories,
   type MemoryRecord,
   type MemorySource,
+  type PairingCheckpoint,
 } from "./memory.js";
 import { Hindsight } from "./hindsight.js";
 import { WorkspaceDiscovery } from "./discovery.js";
@@ -100,6 +101,76 @@ export class PersonalMemory implements vscode.Disposable {
     this.guard(signal);
     const text = doc.getText();
     return { source: { path: resolved, hash: memoryHash(text) }, text };
+  }
+  async saveCheckpoint(
+    scope: string | undefined,
+    task: string,
+    summary: string,
+    outcome: PairingCheckpoint["outcome"],
+    uri: string | undefined,
+    signal: AbortSignal,
+  ): Promise<string | undefined> {
+    if (!scope || !this.enabled()) return;
+    const joined = AbortSignal.any([signal, this.controller.signal]);
+    try {
+      memoryText(task, 12000); // Check the whole request before shortening the checkpoint label.
+      let source: MemorySource | undefined;
+      if (uri) {
+        source = (await this.source(vscode.Uri.parse(uri).fsPath, joined))
+          .source;
+        if ((await this.scope(uri)) !== scope) return;
+      }
+      this.guard(joined);
+      return this.db().saveCheckpoint({
+        scope,
+        task: task.trim().slice(0, 600),
+        summary,
+        outcome,
+        source,
+      }).id;
+    } catch {
+      this.error = "Pairing checkpoint could not be saved; coding continues.";
+      return;
+    }
+  }
+  async checkpoint(
+    scope: string | undefined,
+  ): Promise<(PairingCheckpoint & { fileChanged: boolean }) | undefined> {
+    if (!scope || !this.enabled()) return;
+    const signal = this.controller.signal;
+    try {
+      const checkpoint = this.db().checkpoint(scope);
+      if (!checkpoint) return;
+      let fileChanged = false;
+      if (checkpoint.source)
+        fileChanged =
+          (await this.source(checkpoint.source.path, signal)).source.hash !==
+          checkpoint.source.hash;
+      this.guard(signal);
+      if (this.db().checkpoint(scope)?.id !== checkpoint.id) return;
+      return { ...checkpoint, fileChanged };
+    } catch {
+      return;
+    } // Deleted, newly private or unavailable files cannot supply resume context.
+  }
+  checkpointOutcome(
+    id: string | undefined,
+    outcome: "accepted_unsaved" | "rejected",
+  ): void {
+    if (!id || !this.enabled()) return;
+    try {
+      this.db().checkpointOutcome(id, outcome);
+    } catch {
+      this.error = "Checkpoint edit status could not be saved.";
+    }
+  }
+  clearCheckpoints(scope?: string): void {
+    try {
+      this.db().clearCheckpoints(scope);
+    } catch {
+      this.error = "Checkpoint removal failed; inspect local memory storage.";
+      throw new Error(this.error);
+    }
   }
   async reference(query: string, scope?: string): Promise<MemoryRecord[]> {
     if (!this.enabled()) return [];

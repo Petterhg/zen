@@ -497,3 +497,7 @@ h1 {
     padding-top: 15px;
   }
 }
+
+#checkpointNote {
+  overflow-wrap: anywhere;
+}

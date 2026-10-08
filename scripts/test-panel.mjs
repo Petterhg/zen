@@ -204,6 +204,27 @@ try {
   await page.locator("#toggleSettings").click();
   await page.locator("#toggleSettings").click();
   await page.locator("#manageMemory").click();
+  await page.locator("#resumePairing").click();
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some((m) => m.type === "resumePairing"),
+    ),
+  );
+  await page.evaluate(() =>
+    window.host({
+      type: "checkpointLoaded",
+      task: "<script>historical task</script>",
+      fileChanged: true,
+    }),
+  );
+  assert.match(
+    await page.locator("#checkpointNote").innerText(),
+    /file changed/,
+  );
+  assert.equal(await page.locator("#checkpointNote script").count(), 0);
+  await page.evaluate(() => window.host({ type: "checkpointCleared" }));
+  assert.equal(await page.locator("#checkpointNote").isVisible(), false);
+
   assert.ok(
     await page.evaluate(() =>
       window.messages.some((m) => m.type === "manageMemory"),

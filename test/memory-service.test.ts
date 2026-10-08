@@ -133,6 +133,25 @@ test("memory tools require human evidence, preserve captured repo, reject privat
       ),
       /current file/,
     );
+    const checkpointId = await memory.saveCheckpoint(
+      scope,
+      "Explain authorize",
+      "Explained the return value.",
+      "answer",
+      `file://${file}`,
+      signal,
+    );
+    assert.ok(checkpointId);
+    assert.equal((await memory.checkpoint(scope))?.fileChanged, false);
+    assert.equal(await memory.checkpoint("other-repo"), undefined);
+    buffers.set(file, "export function authorize() { return 42; }");
+    assert.equal((await memory.checkpoint(scope))?.fileChanged, true);
+    await writeFile(
+      path.join(root, ".pairignore"),
+      "private.ts\nservices/auth.ts\n",
+    );
+    assert.equal(await memory.checkpoint(scope), undefined);
+    memory.clearCheckpoints();
     config.memoryEnabled = false;
     memory.changed();
     assert.deepEqual(await memory.reference("functions", scope), []);

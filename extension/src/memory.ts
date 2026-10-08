@@ -39,6 +39,20 @@ export interface MemoryJob {
   record?: MemoryRecord;
   submitted?: boolean;
 }
+export interface PairingCheckpoint {
+  id: string;
+  scope: string;
+  updated: string;
+  task: string;
+  summary: string;
+  outcome:
+    | "answer"
+    | "clarification"
+    | "preview_unapplied"
+    | "accepted_unsaved"
+    | "rejected";
+  source?: MemorySource;
+}
 interface State {
   version: 1;
   owner: string;
@@ -46,6 +60,7 @@ interface State {
   jobs: MemoryJob[];
   blocked: string[];
   forgottenEvidence: string[];
+  checkpoints?: PairingCheckpoint[];
 }
 /** Reject likely secrets, rather than storing a partly redacted preference. */
 export function memoryText(value: unknown, max = 1000): string {
@@ -216,7 +231,10 @@ export class MemoryStore {
       bank: "zen-" + memoryHash(this.state.owner + input.scope).slice(0, 32),
       updated: new Date().toISOString(),
     };
-    if (previous) this.remove(previous, false);
+    if (previous) {
+      this.remove(previous, false);
+      this.state.checkpoints = [];
+    }
     this.state.records.push(record);
     this.state.jobs.push({
       id: randomUUID(),
@@ -250,6 +268,44 @@ export class MemoryStore {
     const record = this.state.records.find((r) => r.id === id);
     if (!record) return;
     this.remove(record, true);
+    this.state.checkpoints = [];
+    this.save();
+  }
+  checkpoint(scope: string): PairingCheckpoint | undefined {
+    return structuredClone(
+      this.state.checkpoints?.find((c) => c.scope === scope),
+    );
+  }
+  saveCheckpoint(
+    input: Omit<PairingCheckpoint, "id" | "updated">,
+  ): PairingCheckpoint {
+    const checkpoint = {
+      ...input,
+      task: memoryText(input.task, 600),
+      summary: memoryText(input.summary, 1000),
+      id: randomUUID(),
+      updated: new Date().toISOString(),
+    };
+    this.state.checkpoints = [
+      ...(this.state.checkpoints ?? []).filter((c) => c.scope !== input.scope),
+      checkpoint,
+    ].slice(-30);
+    this.save();
+    return structuredClone(checkpoint);
+  }
+  checkpointOutcome(
+    id: string,
+    outcome: "accepted_unsaved" | "rejected",
+  ): void {
+    const checkpoint = this.state.checkpoints?.find((c) => c.id === id);
+    if (!checkpoint || checkpoint.outcome !== "preview_unapplied") return;
+    checkpoint.outcome = outcome;
+    this.save();
+  }
+  clearCheckpoints(scope?: string): void {
+    this.state.checkpoints = scope
+      ? (this.state.checkpoints ?? []).filter((c) => c.scope !== scope)
+      : [];
     this.save();
   }
   jobs(): MemoryJob[] {

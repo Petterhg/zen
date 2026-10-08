@@ -58,6 +58,7 @@ These features are implemented in the prototype; this is not a production-readin
 | Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance.                                                          |
 | External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                                         |
 | Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap.                   |
+| Session resume      | Local repository checkpoints, explicit Resume/Start fresh controls, historical edit outcomes and current-file revalidation. Microphone startup stays manual.                                 |
 | Personal memory     | Automatic backend retention, private inspect/correct/forget/pause controls, source freshness checks and optional authenticated local Hindsight. [Setup and limits](docs/personal-memory.md). |
 | Development setup   | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                                         |
 
@@ -83,7 +84,7 @@ Acceptance: explain → edit → verify on an existing service at voice-only and
 - [x] Retain explicit preferences and corrections through backend tools: coding style, conventions, favored approaches, desired assistance and explanation detail. Distinguish personal defaults from repository/service-specific rules.
 - [x] Retain source-backed repository/service summaries: structure, responsibilities, entrypoints, dependencies and architectural decisions, with source references and revision-aware freshness checks. Current code wins over stale recollections.
 - [ ] Evaluate adaptation to stated topic familiarity in real voice sessions. Retention is implemented; automatic inference of skill level is not.
-- [ ] Resume individual pairing sessions with a compact checkpoint of decisions, verified work, open questions and the next step. No issue tracker or project board dependency; never automatically restart the microphone.
+- [ ] Extend the implemented last-result checkpoint into richer session summaries with decisions, open questions and next steps. Explicit resume now restores the previous request/result and historical edit outcome per repository; it never restarts the microphone or replays edits.
 - [x] Provide inspect/correct/forget/pause controls in private Settings/commands. Background indexing runs off the voice path; pairing remains useful while memory is unavailable.
 
 Acceptance: relevant recall after restarting; explicit corrections supersede earlier assumptions; repository boundaries and code freshness are respected; deleted evidence is not immediately relearned; memory improves explanations without slowing or cluttering the conversation. Measure quality, latency, resource use and cost. Local storage does not imply local inference: verify and disclose processing destinations when implementing the adapter. See [the memory design](docs/local-memory-and-shared-tasks.md).
