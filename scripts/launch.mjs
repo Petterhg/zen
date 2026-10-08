@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, writeFileSync, cpSync } from "node:fs";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import {
+  appearanceDefaults,
+  applyAppearanceDefaults,
+} from "./appearance-defaults.mjs";
 import { applyPythonDefaults } from "./python-defaults.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const executable = path.join(
@@ -21,21 +25,7 @@ if (!existsSync(settingsFile))
     settingsFile,
     JSON.stringify(
       {
-        "workbench.colorTheme": "Pair Graphite",
-        "workbench.activityBar.location": "hidden",
-        "workbench.startupEditor": "none",
-        "workbench.editor.enablePreview": false,
-        "workbench.editor.showTabs": "multiple",
-        "workbench.layoutControl.enabled": false,
-        "workbench.secondarySideBar.defaultVisibility": "visible",
-        "workbench.tips.enabled": false,
-        "window.commandCenter": false,
-        "window.title": "${activeEditorShort}${separator}Pair Code",
-        "editor.minimap.enabled": false,
-        "editor.fontSize": 13,
-        "editor.lineHeight": 22,
-        "editor.padding.top": 12,
-        "editor.fontFamily": "SF Mono, Menlo, monospace",
+        ...appearanceDefaults,
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
@@ -53,6 +43,7 @@ if (!existsSync(settingsFile))
       2,
     ),
   );
+applyAppearanceDefaults(settingsFile);
 applyPythonDefaults(settingsFile);
 mkdirSync(path.join(root, ".runtime/extensions"), { recursive: true });
 // Extension development hosts have no persistent working-copy backup path.

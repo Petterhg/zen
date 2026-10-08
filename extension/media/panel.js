@@ -463,6 +463,25 @@
       .then(() => $("playAudio").classList.add("hidden"))
       .catch(() => showError("Audio playback is blocked."));
   });
+  // Appearance and folding never touch the transport, microphone or backend job.
+  for (const [id, type] of [
+    ["switchTheme", "toggleTheme"],
+    ["foldWorkboard", "toggleWorkboard"],
+    ["applyLayout", "applyLayout"],
+  ]) {
+    $(id).addEventListener("click", () => post({ type }));
+  }
+  $("toggleSettings").addEventListener("click", () => {
+    $("pairingSettings").open = !$("pairingSettings").open;
+    if ($("pairingSettings").open)
+      $("pairingSettings").scrollIntoView({ block: "nearest" });
+  });
+  $("pairingSettings").addEventListener("toggle", () => {
+    $("toggleSettings").setAttribute(
+      "aria-expanded",
+      String($("pairingSettings").open),
+    );
+  });
   for (const id of ["configure", "setupKeys"])
     $(id).addEventListener("click", () => post({ type: "configure" }));
   for (const type of ["cancel"])
@@ -625,6 +644,7 @@
     }
     if (data.type === "context") {
       $("contextFile").textContent = data.file;
+      $("workspaceLabel").textContent = data.workspace || "YOUR WORKSPACE";
       $("selectionBadge").textContent = data.selectionLines
         ? `${data.selectionLines} lines`
         : "";

@@ -6,21 +6,183 @@
     <!-- prettier-ignore -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}}; script-src 'nonce-{{nonce}}'; media-src blob:; connect-src 'none'; img-src {{cspSource}};" />
     <link rel="stylesheet" href="{{css}}" />
-    <title>Pair</title>
+    <title>Zen Workboard</title>
   </head>
   <body>
     <header class="identity">
-      <span class="wordmark">pair<span class="period">.</span></span
-      ><button
-        id="configure"
-        class="icon-button"
-        title="Configure API keys"
-        aria-label="Configure API keys"
+      <span class="wordmark"
+        ><span class="enso" aria-hidden="true"></span>zen</span
       >
-        ⚙
-      </button>
+      <div class="header-actions">
+        <button
+          id="switchTheme"
+          class="icon-button"
+          aria-label="Switch light and dark theme"
+          title="Switch light / dark"
+        >
+          ◐
+        </button>
+        <button
+          id="toggleSettings"
+          class="icon-button"
+          aria-label="Pairing settings"
+          aria-expanded="false"
+          title="Pairing settings"
+        >
+          ⚙
+        </button>
+        <button
+          id="foldWorkboard"
+          class="icon-button"
+          aria-label="Fold workboard"
+          title="Fold workboard (⌘⌥J)"
+        >
+          ›
+        </button>
+      </div>
     </header>
     <main>
+      <div class="workboard-scroll">
+        <div class="workboard-heading">
+          <span class="eyebrow" id="workspaceLabel">YOUR WORKSPACE</span>
+          <h2>A shared place to think.</h2>
+          <p>One small step, close to the code.</p>
+        </div>
+
+        <section class="context-bar" aria-label="Shared editor context">
+          <span class="file-icon" aria-hidden="true">⌘</span
+          ><span id="contextFile">No shared file</span
+          ><span id="selectionBadge"></span>
+        </section>
+        <div id="setup" class="setup-note">
+          <span>Connect your models to begin.</span
+          ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
+        </div>
+        <section class="research" aria-label="Research and documentation">
+          <div class="research-heading">
+            <span class="eyebrow">RESEARCH</span
+            ><button id="clearResearch" class="text-button">Clear</button>
+          </div>
+          <p id="researchEmpty" class="quiet-note">
+            Documentation your pair reads appears here.<br />Code suggestions
+            appear in the editor.
+          </p>
+          <div id="researchPages"></div>
+        </section>
+        <p
+          id="editStatus"
+          class="quiet-note"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="error" class="error hidden" role="alert"></div>
+        <section class="code-index" aria-label="Code indexing">
+          <div class="settings-row">
+            <span id="indexStatus" role="status">Code index starting…</span
+            ><button
+              id="refreshIndex"
+              class="text-button"
+              title="Refresh code index"
+            >
+              ↻
+            </button>
+          </div>
+          <progress
+            id="indexProgress"
+            class="hidden"
+            aria-label="Files checked in current repository"
+          ></progress>
+          <p id="indexDetail" class="quiet-note"></p>
+          <p id="indexError" class="error hidden" role="alert"></p>
+        </section>
+        <div id="backendActivity" class="backend-activity hidden">
+          <span class="working-dot"></span><span>Thinking about your code…</span
+          ><button id="cancel" class="text-button">Stop</button>
+        </div>
+        <form id="composer" class="composer">
+          <label for="message" class="sr-only">Message your pair</label
+          ><textarea
+            id="message"
+            rows="1"
+            placeholder="Or type a request…"
+          ></textarea
+          ><button
+            class="send-button"
+            id="send"
+            aria-label="Send message"
+            title="Send message"
+          >
+            ↑
+          </button>
+        </form>
+        <p id="deliveryStatus" class="stale" aria-live="polite"></p>
+        <details id="pairingSettings" class="pairing-settings">
+          <summary>Pairing settings</summary>
+          <div class="settings-row">
+            <button id="configure" class="text-button">API keys</button
+            ><button id="applyLayout" class="text-button">
+              Apply calm layout
+            </button>
+          </div>
+          <section class="pairing-style" aria-label="Pairing style">
+            <div class="pairing-style-heading">
+              <label for="assistanceLevel">How much Pair does</label
+              ><output id="assistanceLabel" for="assistanceLevel"
+                >One small step</output
+              >
+            </div>
+            <input
+              id="assistanceLevel"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="25"
+              aria-describedby="assistanceDescription"
+            />
+            <div class="pairing-style-endpoints">
+              <span>Do nothing</span><span>Draft it for me</span>
+            </div>
+            <p id="assistanceDescription" class="quiet-note">
+              Explain one small step, then wait. Tiny previews when requested.
+            </p>
+          </section>
+
+          <div class="context-bar">
+            <label for="inlineMode">Inline suggestions</label
+            ><select id="inlineMode">
+              <option value="off">Off</option>
+              <option value="manual">On request</option>
+              <option value="automatic">Automatic</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <label
+              ><input type="checkbox" id="shareContext" checked /> Share editor
+              context</label
+            ><button id="showTrace" class="text-button">
+              Open session trace
+            </button>
+          </div>
+          <div class="settings-row">
+            <label
+              ><input type="checkbox" id="followPair" checked /> Follow Pair in
+              the editor</label
+            >
+          </div>
+          <footer>
+            <span class="model-label">gpt-live-1</span
+            ><span class="footer-separator">/</span
+            ><label class="sr-only" for="provider">Code backend</label
+            ><select id="provider">
+              <option value="groq">Groq</option>
+              <option value="cerebras">Cerebras</option></select
+            ><span class="footer-right" id="contextSharing"
+              >Editor context on</span
+            >
+          </footer>
+        </details>
+      </div>
       <section class="voice-card" aria-label="Voice pairing">
         <div class="voice-mark" id="voiceMark" aria-hidden="true">
           <i></i><i></i><i></i><i></i><i></i>
@@ -48,125 +210,6 @@
           Play Assistant Audio
         </button>
       </section>
-      <section class="context-bar" aria-label="Shared editor context">
-        <span class="file-icon" aria-hidden="true">⌘</span
-        ><span id="contextFile">No shared file</span
-        ><span id="selectionBadge"></span>
-      </section>
-      <div id="setup" class="setup-note">
-        <span>Connect your models to begin.</span
-        ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
-      </div>
-      <section class="research" aria-label="Research and documentation">
-        <div class="research-heading">
-          <span class="eyebrow">RESEARCH</span
-          ><button id="clearResearch" class="text-button">Clear</button>
-        </div>
-        <p id="researchEmpty" class="quiet-note">
-          Documentation your pair reads appears here.<br />Code suggestions
-          appear in the editor.
-        </p>
-        <div id="researchPages"></div>
-      </section>
-      <p
-        id="editStatus"
-        class="quiet-note"
-        role="status"
-        aria-live="polite"
-      ></p>
-      <div id="error" class="error hidden" role="alert"></div>
-      <section class="code-index" aria-label="Code indexing">
-        <div class="settings-row">
-          <span id="indexStatus" role="status">Code index starting…</span
-          ><button
-            id="refreshIndex"
-            class="text-button"
-            title="Refresh code index"
-          >
-            ↻
-          </button>
-        </div>
-        <progress
-          id="indexProgress"
-          class="hidden"
-          aria-label="Files checked in current repository"
-        ></progress>
-        <p id="indexDetail" class="quiet-note"></p>
-        <p id="indexError" class="error hidden" role="alert"></p>
-      </section>
-      <div id="backendActivity" class="backend-activity hidden">
-        <span class="working-dot"></span><span>Thinking about your code…</span
-        ><button id="cancel" class="text-button">Stop</button>
-      </div>
-      <section class="pairing-style" aria-label="Pairing style">
-        <div class="pairing-style-heading">
-          <label for="assistanceLevel">How much Pair does</label
-          ><output id="assistanceLabel" for="assistanceLevel"
-            >One small step</output
-          >
-        </div>
-        <input
-          id="assistanceLevel"
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value="25"
-          aria-describedby="assistanceDescription"
-        />
-        <div class="pairing-style-endpoints">
-          <span>Do nothing</span><span>Draft it for me</span>
-        </div>
-        <p id="assistanceDescription" class="quiet-note">
-          Explain one small step, then wait. Tiny previews when requested.
-        </p>
-      </section>
-      <form id="composer" class="composer">
-        <label for="message" class="sr-only">Message your pair</label
-        ><textarea
-          id="message"
-          rows="2"
-          placeholder="Or ask for a change…"
-        ></textarea
-        ><button
-          class="send-button"
-          id="send"
-          aria-label="Send message"
-          title="Send message"
-        >
-          ↑
-        </button>
-      </form>
-      <div class="context-bar">
-        <label for="inlineMode">Inline suggestions</label
-        ><select id="inlineMode">
-          <option value="off">Off</option>
-          <option value="manual">On request</option>
-          <option value="automatic">Automatic</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <label
-          ><input type="checkbox" id="shareContext" checked /> Share editor
-          context</label
-        ><button id="showTrace" class="text-button">Open session trace</button>
-      </div>
-      <div class="settings-row">
-        <label
-          ><input type="checkbox" id="followPair" checked /> Follow Pair in the
-          editor</label
-        >
-      </div>
-      <p id="deliveryStatus" class="stale" aria-live="polite"></p>
-      <footer>
-        <span class="model-label">gpt-live-1</span
-        ><span class="footer-separator">/</span
-        ><label class="sr-only" for="provider">Code backend</label
-        ><select id="provider">
-          <option value="groq">Groq</option>
-          <option value="cerebras">Cerebras</option></select
-        ><span class="footer-right" id="contextSharing">Editor context on</span>
-      </footer>
     </main>
     <script nonce="{{nonce}}" src="{{protocol}}"></script>
     <script nonce="{{nonce}}" src="{{js}}"></script>

@@ -181,25 +181,44 @@ function notify(text) {
   toastTimer = setTimeout(() => ($("toast").hidden = true), 3800);
 }
 function highlight(s) {
-  const parts =
-    s.match(
-      /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\b(?:export|async|function|const|let|for|try|catch|if|return|await|throw|new|import|from|type|interface)\b|\b\d[\d_]*\b|[\s\S]/g,
-    ) || [];
-  return parts
-    .map((v) => {
-      let cls =
-        v.startsWith("//") || v.startsWith("/*")
-          ? "comment"
-          : /^["']/.test(v)
-            ? "str"
-            : /^[a-z]{2,}$/.test(v)
-              ? "kw"
-              : /^\d/.test(v)
-                ? "num"
-                : "";
-      return cls ? `<span class="${cls}">${esc(v)}</span>` : esc(v);
-    })
-    .join("");
+  const tokens =
+    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\b[A-Za-z_$][\w$]*\b|\b\d[\d_]*\b|[\s\S]/g;
+  const keywords = new Set([
+    "export",
+    "async",
+    "function",
+    "const",
+    "let",
+    "for",
+    "try",
+    "catch",
+    "if",
+    "return",
+    "await",
+    "throw",
+    "new",
+    "import",
+    "from",
+    "type",
+    "interface",
+  ]);
+  return Array.from(s.matchAll(tokens), (m) => {
+    const v = m[0],
+      tail = s.slice(m.index + v.length);
+    const line = s.slice(s.lastIndexOf("\n", m.index - 1) + 1, m.index);
+    let cls = "";
+    if (v.startsWith("//") || v.startsWith("/*")) cls = "comment";
+    else if (/^["']/.test(v)) cls = "str";
+    else if (keywords.has(v)) cls = "kw";
+    else if (/^\d/.test(v)) cls = "num";
+    else if (/^[A-Z]\w*$/.test(v)) cls = "type";
+    else if (
+      /^[A-Za-z_$][\w$]*$/.test(v) &&
+      (/^\s*(?:<[^>\n]+>)?\s*\(/.test(tail) || /^\s*import\b/.test(line))
+    )
+      cls = "fn";
+    return cls ? `<span class="${cls}">${esc(v)}</span>` : esc(v);
+  }).join("");
 }
 function renderCode() {
   const r = record();

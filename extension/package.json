@@ -22,7 +22,7 @@
       "secondarySidebar": [
         {
           "id": "pairCode",
-          "title": "Pair",
+          "title": "Zen",
           "icon": "media/pair.svg"
         }
       ]
@@ -32,8 +32,8 @@
         {
           "type": "webview",
           "id": "pairCode.companion",
-          "name": "Pair",
-          "contextualTitle": "Pair"
+          "name": "Workboard",
+          "contextualTitle": "Zen Workboard"
         }
       ]
     },
@@ -73,6 +73,18 @@
       {
         "command": "pairCode.refreshIndex",
         "title": "Pair Code: Refresh Code Index"
+      },
+      {
+        "command": "pairCode.toggleTheme",
+        "title": "Zen: Switch Light / Dark"
+      },
+      {
+        "command": "pairCode.toggleWorkboard",
+        "title": "Zen: Toggle Workboard"
+      },
+      {
+        "command": "pairCode.applyLayout",
+        "title": "Zen: Apply Calm Layout"
       }
     ],
     "keybindings": [
@@ -107,6 +119,11 @@
         "command": "pairCode.accept",
         "key": "tab",
         "when": "pairCode.hasProposal && inlineEditVisible && editorTextFocus"
+      },
+      {
+        "command": "pairCode.toggleWorkboard",
+        "key": "ctrl+alt+j",
+        "mac": "cmd+alt+j"
       }
     ],
     "configuration": {
@@ -198,8 +215,48 @@
         "label": "Pair Graphite",
         "uiTheme": "vs-dark",
         "path": "./media/theme.json"
+      },
+      {
+        "label": "Zen Dark",
+        "uiTheme": "vs-dark",
+        "path": "./media/zen-dark.json"
+      },
+      {
+        "label": "Zen Light",
+        "uiTheme": "vs",
+        "path": "./media/zen-light.json"
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "workbench.colorTheme": "Zen Dark",
+      "workbench.preferredDarkColorTheme": "Zen Dark",
+      "workbench.preferredLightColorTheme": "Zen Light",
+      "workbench.activityBar.location": "hidden",
+      "workbench.startupEditor": "none",
+      "workbench.editor.enablePreview": false,
+      "workbench.editor.showTabs": "multiple",
+      "workbench.editor.tabSizing": "shrink",
+      "workbench.layoutControl.enabled": false,
+      "workbench.secondarySideBar.defaultVisibility": "visible",
+      "workbench.tips.enabled": false,
+      "window.commandCenter": false,
+      "window.title": "${activeEditorShort}${separator}Zen",
+      "editor.minimap.enabled": false,
+      "editor.fontSize": 13,
+      "editor.lineHeight": 25,
+      "editor.padding.top": 18,
+      "editor.padding.bottom": 16,
+      "editor.fontFamily": "SF Mono, Menlo, Consolas, monospace",
+      "editor.renderLineHighlight": "none",
+      "editor.semanticHighlighting.enabled": true,
+      "breadcrumbs.enabled": false,
+      "terminal.integrated.fontFamily": "SF Mono, Menlo, Consolas, monospace",
+      "terminal.integrated.fontSize": 12,
+      "terminal.integrated.lineHeight": 1.4,
+      "terminal.integrated.cursorStyle": "line",
+      "terminal.integrated.cursorBlinking": false,
+      "terminal.integrated.tabs.enabled": false
+    }
   },
   "enabledApiProposals": [
     "inlineCompletionsAdditions"

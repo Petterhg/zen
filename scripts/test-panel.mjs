@@ -159,6 +159,8 @@ try {
     "1",
   );
   assert.equal(await page.locator("#assistanceLevel").inputValue(), "25");
+  assert.equal(await page.locator("#assistanceLevel").isVisible(), false);
+  await page.locator("#toggleSettings").click();
   await page.locator("#assistanceLevel").fill("0");
   assert.equal(
     await page.locator("#assistanceLabel").textContent(),
@@ -191,6 +193,33 @@ try {
     () =>
       document.getElementById("voiceStatus").textContent ===
       "Listening · GPT-Live",
+  );
+  const voiceBeforeAppearance = await page.evaluate(() => ({
+    peers: window.peers.length,
+    events: window.sent.length,
+    stopped: window.tracks.filter((track) => track.stopped).length,
+  }));
+  await page.locator("#switchTheme").click();
+  await page.locator("#foldWorkboard").click();
+  await page.locator("#toggleSettings").click();
+  await page.locator("#toggleSettings").click();
+  assert.deepEqual(
+    await page.evaluate(() => ({
+      peers: window.peers.length,
+      events: window.sent.length,
+      stopped: window.tracks.filter((track) => track.stopped).length,
+    })),
+    voiceBeforeAppearance,
+  );
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some((m) => m.type === "toggleTheme"),
+    ),
+  );
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some((m) => m.type === "toggleWorkboard"),
+    ),
   );
   await page.evaluate(() =>
     window.host({

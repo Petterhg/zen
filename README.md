@@ -21,7 +21,7 @@ npm start
 
 Open another repository with `npm start -- /absolute/path/to/repository`. The runtime, settings, extensions, and data live inside this project; your existing editor installation and settings are separate.
 
-In the right panel, choose **Add API Keys** and configure OpenAI plus Groq or Cerebras. Keys are entered in a masked native input and saved with VS Code SecretStorage. For local development, copy `.env.example` to `.env` in your clone and add `OPENAI_API_KEY` plus `GROQ_API_KEY` or `CEREBRAS_API_KEY`. `FIRECRAWL_API_KEY` enables web search and page reading. Restart Pair Code after creating the file. This fixed application file is read only in the local prototype launched with npm start or an extension development host; a repository opened for editing cannot supply provider keys. SecretStorage takes precedence over launch environment variables, which take precedence over this file. No secrets belong in source, workspace settings, or the webview.
+In the right workboard, open **Pairing settings** (⚙), choose **Add API Keys** and configure OpenAI plus Groq or Cerebras. Keys are entered in a masked native input and saved with VS Code SecretStorage. For local development, copy `.env.example` to `.env` in your clone and add `OPENAI_API_KEY` plus `GROQ_API_KEY` or `CEREBRAS_API_KEY`. `FIRECRAWL_API_KEY` enables web search and page reading. Restart Pair Code after creating the file. This fixed application file is read only in the local prototype launched with npm start or an extension development host; a repository opened for editing cannot supply provider keys. SecretStorage takes precedence over launch environment variables, which take precedence over this file. No secrets belong in source, workspace settings, or the webview.
 
 Press **Start Pairing** and allow the microphone. The session keeps listening while you type and navigate, until you mute or disconnect. Routine typing and cursor updates are coalesced and held while Pair is speaking; a spoken request refreshes the latest focus immediately. The microphone stays live for natural spoken interruptions. Starting a session requires a click and microphone permission; the app does not silently start capture at launch. Muting keeps the session connected and billable; disconnect ends it.
 
@@ -30,6 +30,8 @@ Try selecting the function in `demo/pairing.ts` and saying “Simplify this with
 Use the **Inline suggestions** control to choose Off, On request (default), or Automatic. *_⌥\*_ requests an insertion at the cursor; use the editor’s normal Tab acceptance and Escape dismissal. Inline suggestions are canceled when the context changes. Voice-requested insertions and replacements still require explicit proposal acceptance, even with predictions turned off. Empty files are supported: an insertion is anchored at the captured cursor.
 
 To explore an existing service, say “Explore `services/ner`: trace its entrypoints, extraction flow and callers, and tell me what remains unchecked.” Pair delegates research to a separate context. The explorer starts with that directory and follows relevant references outward; the main conversation receives a compact findings report with file/line evidence. Repository exploration uses local tools by default. Ask explicitly for external documentation when you also want web research. Exploration proposes no edits; request an implementation separately. Known files can be read in batches, and native text search overlays unsaved buffers. Compact explorer findings stay available within the voice session and are marked stale after edits. Changing the assistance slider preserves ongoing research and waits for quiet playback before updating the speaker; the new local setting applies immediately.
+
+Use **Zen: Switch Light / Dark** from the command palette or the ◐ button in the workboard. **⌘⌥J** folds and restores the workboard without ending voice pairing. Settings stay collapsed by default; research and current-file context stay on the main surface. **Zen: Apply Calm Layout** applies the quieter layout to an existing profile while keeping its selected theme. New profiles use Zen Dark; custom appearance settings are preserved.
 
 ## Zen workbench design preview
 
@@ -43,7 +45,7 @@ These features are implemented in the prototype; this is not a production-readin
 
 | Area                | Available today                                                                                                                                                            |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Editor              | File navigator, tabs, terminal, minimal Graphite layout, and pinned Code-OSS/VSCodium runtime.                                                                             |
+| Editor              | File navigator, tabs, terminal, Zen Light/Dark syntax themes, quieter chrome, folding workboard with persistent voice controls, and pinned Code-OSS/VSCodium runtime.      |
 | Voice pairing       | Continuous GPT-Live conversation with Groq/Cerebras delegation, mute/disconnect controls, and local session diagnostics.                                                   |
 | Shared context      | Active file, selection, cursor, viewport, unsaved buffers, diagnostics, and recent files.                                                                                  |
 | Human control       | Assistance slider from voice-only guidance to larger code proposals; inline suggestions can be off, on request, or automatic.                                              |
@@ -74,7 +76,7 @@ Milestone acceptance: demonstrate this interaction on an existing service at voi
 
 ### Task workspace and collaboration
 
-- [ ] Bring the [Zen workbench design study](docs/zen-workbench.md) into the native editor: calm theme, reduced chrome, folding workboard and persistent voice controls. The browser example is an interaction prototype only.
+- [ ] Extend the native themed workboard with task switching and the delivery timeline from the [design study](docs/zen-workbench.md). Native themes, reduced chrome, folding and persistent voice controls are implemented; task/agent/collaboration examples remain browser simulations.
 - [ ] Persist task-linked session checkpoints, decisions and checkout context; resume after restart without automatically starting the microphone.
 - [ ] Connect Linear issues to GitHub PR/review/CI evidence and AWS/GCP deployment/integration results, tied to the exact revision and explicit action permissions.
 - [ ] Add shared editable task workspaces: both people edit code/files, while the inviter owns the single assistant and its controls. Keep independent navigation, optional following and explicit host-loss behavior.

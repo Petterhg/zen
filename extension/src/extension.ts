@@ -681,6 +681,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     const contextId = this.focus.record(snapshot);
     this.post({
       type: "context",
+      workspace: vscode.workspace.name ?? "Your workspace",
       urgent,
       contextId,
       file: snapshot?.file ?? "No shared file",
@@ -731,6 +732,12 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   private async handleMessage(message: PanelMessage): Promise<void> {
     try {
+      if (
+        ["toggleTheme", "toggleWorkboard", "applyLayout"].includes(message.type)
+      ) {
+        await vscode.commands.executeCommand(`pairCode.${message.type}`);
+        return;
+      }
       if (message.type === "refreshIndex") {
         this.refreshIndex();
         return;
@@ -1635,6 +1642,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     companion,
     vscode.window.registerWebviewViewProvider("pairCode.companion", companion, {
       webviewOptions: { retainContextWhenHidden: true },
+    }),
+    vscode.commands.registerCommand("pairCode.toggleTheme", async () => {
+      const light = [
+        vscode.ColorThemeKind.Light,
+        vscode.ColorThemeKind.HighContrastLight,
+      ].includes(vscode.window.activeColorTheme.kind);
+      await vscode.workspace
+        .getConfiguration("workbench")
+        .update(
+          "colorTheme",
+          light ? "Zen Dark" : "Zen Light",
+          vscode.ConfigurationTarget.Global,
+        );
+    }),
+    vscode.commands.registerCommand("pairCode.toggleWorkboard", () =>
+      vscode.commands.executeCommand("workbench.action.toggleAuxiliaryBar"),
+    ),
+    vscode.commands.registerCommand("pairCode.applyLayout", async () => {
+      const defaults = context.extension.packageJSON.contributes
+        .configurationDefaults as Record<string, unknown>;
+      // A deliberate appearance action, preserving the currently selected light/dark theme.
+      for (const [key, value] of Object.entries(defaults)) {
+        if (key === "workbench.colorTheme") continue;
+        await vscode.workspace
+          .getConfiguration()
+          .update(key, value, vscode.ConfigurationTarget.Global);
+      }
     }),
     vscode.commands.registerCommand("pairCode.refreshIndex", () =>
       companion.refreshIndex(),

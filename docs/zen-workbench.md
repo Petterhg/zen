@@ -1,6 +1,14 @@
 # A quieter Zen workbench
 
-Design study and interactive example, 8 October 2026. This proposes the next UI direction; it does not replace the running Code-OSS editor.
+Design study and interactive example, 8 October 2026. The first appearance slice now runs in the native editor; task workflows below are still a browser prototype.
+
+## Native slice implemented
+
+Zen Light and Zen Dark ship as native TextMate/semantic themes with restrained function, import, type, string and number colors. Native editor and terminal spacing, tabs and separators use the same palette. The live pairing webview has a folding workboard, collapsed settings, visible research/errors and voice controls anchored below its scrollable content. The theme button updates the editor theme; folding retains the webview and its transport. Existing inline edit acceptance and language tooling are unchanged.
+
+Use `Zen: Switch Light / Dark`, `Zen: Toggle Workboard` (⌘⌥J) and `Zen: Apply Calm Layout` from the command palette. Launch seeds missing appearance settings and migrates the previous Pair Graphite default, preserving custom choices. The explicit layout command applies the new defaults to an existing profile. Both packaged-runtime installation and source-overlay installation carry the extension manifest, themes and webview; no new upstream patch is needed for this slice.
+
+Validation: type/lint/build, 65 unit/regression checks including runtime integrity, simulated panel lifecycle and browser interaction checks passed. Native light/dark appearance and fold/restore were inspected in an isolated empty window without changing workspace trust or starting a microphone/provider call. Live voice continuity still needs a human session. Task checkpoints, specialists, delivery integrations, Hindsight and shared editing are not connected to the native workboard yet.
 
 ## Try the example
 

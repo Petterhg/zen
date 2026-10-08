@@ -14,7 +14,9 @@
   --amber: #d6ba88;
   --red: #d7a79d;
   --blue: #a3bec7;
-  --purple: #bfb2cb;
+  --purple: #c4abe3;
+  --syntax-function: #9dc8dc;
+  --syntax-type: #d6bd86;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -1105,7 +1107,9 @@ body.light {
   --amber: #8b602e;
   --red: #995948;
   --blue: #437480;
-  --purple: #7c607e;
+  --purple: #84539b;
+  --syntax-function: #356c92;
+  --syntax-type: #89672e;
 }
 body.light .note,
 body.light .proposal {
@@ -1251,4 +1255,11 @@ body.light .primary:hover {
   border-radius: 5px;
   font: 12px/1.7 var(--mono);
   resize: vertical;
+}
+
+.fn {
+  color: var(--syntax-function);
+}
+.type {
+  color: var(--syntax-type);
 }
