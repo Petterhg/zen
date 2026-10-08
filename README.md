@@ -51,20 +51,20 @@ These features are implemented in the prototype; this is not a production-readin
 | Code pointing       | Spoken explanations can highlight code; Follow Pair controls automatic scrolling.                                                                                          |
 | Project exploration | Isolated read-only researcher, scoped file/text search, batched reads, and language-service references.                                                                    |
 | Semantic retrieval  | Local Turso index, OpenAI small embeddings at 768 dimensions, hybrid search, service/repository filters, incremental updates, and unsaved-buffer handling.                 |
+| Indexing progress   | Scanning/indexing phases, files checked, active file, embedded/reused chunk counts, update time, visible errors and retry guidance. |
 | External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                       |
 | Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap. |
 | Collaboration       | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                       |
 
 ## Roadmap
 
-Ordered by current priority, not promised release dates. Completed work moves into Features after it is merged; open PRs remain identified here. Update this section in the same PR when user-visible capability or priority changes.
+Ordered by current priority, not promised release dates. Completed work moves into Features after it is merged; open PRs remain identified here. Update this section in the same change when user-visible capability or priority changes.
 
 ### Next milestone: explain → edit → verify
 
 **Goal:** Select a function, ask for an explanation, make a guided change, and have the assistant notice and help verify it. The human stays in control of how much code the assistant writes.
 
 - [ ] **Repair Python environment discovery.** Bundle a working `pet` helper for the supported platform and verify it during setup. Selecting an existing interpreter must not mask broken environment discovery.
-- [ ] **Make indexing observable.** Show phases, file progress, current file, chunk counts and visible failures. Implementation is in [PR #1](https://github.com/Petterhg/zen/pull/1), pending merge.
 - [ ] **Evaluate retrieval on real coding questions.** Measure relevant results, missed evidence, lookup latency and backend rounds for service explanations and impact questions. Keep private evaluation content out of public fixtures.
 - [ ] **Make coaching respond to human edits.** Recognize a completed step, use current buffers and diagnostics, and continue without stale instructions, repeated acknowledgments or interrupted speech.
 - [ ] **Strengthen impact analysis.** Combine semantic matches with definitions, references, imports and relevant tests; distinguish verified dependencies from inference and incomplete coverage.
@@ -79,9 +79,23 @@ Milestone acceptance: demonstrate this interaction on an existing service at voi
 - [ ] Connect Linear issues to GitHub PR/review/CI evidence and AWS/GCP deployment/integration results, tied to the exact revision and explicit action permissions.
 - [ ] Add shared task rooms, then concurrent editing and coordinated multi-person voice pairing with the AI. Independent navigation and opt-in following come first.
 
+### Proposed: durable project and personal memory
+
+- [ ] **Pilot optional memory behind a provider adapter**, with [Hindsight](https://github.com/vectorize-io/hindsight) as a candidate rather than a committed dependency. Start with explicit “remember this,” project decisions with rationale, and a short session-resume brief. No memory service is implemented or enabled yet.
+
+Potential implementation:
+
+- Keep current source retrieval in Turso and live cursor/buffer state in the editor. Durable memory holds preferences, decisions, verified findings and unfinished work, with separate personal and shared project scopes.
+- Call the memory provider from the extension host through its TypeScript client or HTTP API. Recall relevant evidence alongside code search; retain compact outcome records asynchronously. Keep memory failures and slow reflection off the speech-critical path.
+- Store source/commit references and distinguish proposed, accepted and verified outcomes. Revalidate code-related memories against current files; current user instructions and repository rules take precedence over inferred memories.
+- Provide inspect, correct, forget and disable controls. Choose storage/inference destinations explicitly; local hosting does not imply local model inference. Do not ingest raw transcripts or private code automatically as part of the pilot.
+- Evaluate a separately hosted Hindsight service first; it has its own database/model dependencies and does not replace our embedded Turso index. Background project summaries are a possible later optimization.
+
+Acceptance: a new session recalls a relevant decision, respects a correction/deletion, avoids cross-project or cross-user leakage, and remains usable when memory is unavailable. Measure recall usefulness, added latency and model cost before making it a default feature.
+
 ### Later
 
-- [ ] Persistent project knowledge with source/version tracking and invalidation.
+- [ ] Extend the memory pilot to maintained project summaries with source/version tracking and invalidation.
 - [ ] MCP and third-party tool integrations with clear permissions.
 - [ ] Parallel exploration for broad, independent research where measurements justify the added complexity.
 - [ ] Retrieval scaling and additional language-aware chunking based on evaluation results.
