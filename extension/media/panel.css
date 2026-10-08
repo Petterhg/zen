@@ -432,3 +432,20 @@ select {
 .pairing-style .quiet-note {
   margin: 6px 0 0;
 }
+
+.code-index {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+.code-index progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+}
+.code-index .quiet-note {
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}
+.code-index .error {
+  overflow-wrap: anywhere;
+}

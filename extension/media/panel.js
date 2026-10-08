@@ -550,11 +550,47 @@
   );
   window.addEventListener("message", ({ data }) => {
     if (data.type === "indexStatus") {
+      const active = ["starting", "scanning", "indexing", "updating"].includes(
+        data.state,
+      );
+      const label = {
+        starting: "Code index starting…",
+        scanning: "Scanning repository…",
+        indexing: `Indexing · ${data.processed ?? 0} / ${data.total ?? "?"} files checked`,
+        updating: "Updating changed files…",
+        ready: `Code index ready · ${data.files} files`,
+        paused: "Code index paused",
+        untrusted: "Code index waiting for workspace trust",
+        error: "Code index needs attention",
+      };
       $("indexStatus").textContent =
-        data.state === "error"
-          ? "Code index needs attention"
-          : `Code index ${data.state} · ${data.files} files`;
-      $("indexStatus").title = data.error || "Local Turso · OpenAI small / 768";
+        label[data.state] || `Code index ${data.state}`;
+      const progress = $("indexProgress");
+      progress.classList.toggle("hidden", !active);
+      if (data.state === "indexing" && data.total > 0) {
+        progress.max = data.total;
+        progress.value = data.processed || 0;
+      } else progress.removeAttribute("value");
+      $("indexDetail").textContent =
+        data.state === "paused"
+          ? "Enable Code Index and Share Editor Context in settings to resume."
+          : data.state === "untrusted"
+            ? "Trust this workspace to enable indexing."
+            : [
+                data.repository,
+                active && data.currentFile,
+                `${data.embedded || 0} chunks embedded · ${data.reused || 0} cached chunks reused this pass`,
+                data.updatedAt &&
+                  `Updated ${new Date(data.updatedAt).toLocaleTimeString()}`,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+      $("indexError").textContent = data.error
+        ? `${data.error} Fix the cause, then press ↻ to retry.`
+        : "";
+      $("indexError").classList.toggle("hidden", !data.error);
+      $("indexStatus").title =
+        "Local Turso · OpenAI small / 768. Files checked includes unchanged or excluded candidates; ready shows indexed files.";
     }
     if (data.type === "rpcResult") {
       const entry = pending.get(data.id);

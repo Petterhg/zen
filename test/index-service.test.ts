@@ -5,7 +5,10 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
-import type { IndexService } from "../extension/src/index-service.js";
+import type {
+  IndexService,
+  IndexStatus,
+} from "../extension/src/index-service.js";
 const requireNative = createRequire(import.meta.url);
 const bundled = await build({
   entryPoints: [
@@ -93,6 +96,7 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
     mod,
     mod.exports,
   );
+  const statuses: IndexStatus[] = [];
   const service = new mod.exports.IndexService!(
     {
       extensionPath: path.resolve(import.meta.dirname, "../extension"),
@@ -100,7 +104,7 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
     } as never,
     async () => "fake",
     () => enabled,
-    () => {},
+    (status) => statuses.push({ ...status }),
   );
   t.after(() => service.dispose());
   const ready = async () => {
@@ -115,6 +119,22 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   };
   await ready();
   assert.equal(service.status.files, 1);
+  assert.ok(statuses.some((s) => s.state === "scanning"));
+  assert.ok(
+    statuses.some(
+      (s) =>
+        s.state === "indexing" &&
+        s.total === 1 &&
+        s.processed === 0 &&
+        s.currentFile === "services/auth/main.py",
+    ),
+  );
+  assert.ok(
+    statuses.some(
+      (s) => s.state === "indexing" && s.processed === 1 && s.embedded > 0,
+    ),
+  );
+  assert.equal(service.status.currentFile, undefined);
   const search = async (query: string) =>
     (await service.search(
       {
