@@ -783,3 +783,88 @@ input[type="range"] {
     padding: 5px;
   }
 }
+.legacy-connect {
+  display: none !important;
+}
+.conversation-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.conversation-actions button {
+  font-size: 10px;
+  padding: 6px 8px;
+}
+.identity {
+  height: auto;
+  min-height: 100px;
+}
+body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+main {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+.identity {
+  flex-shrink: 0;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 16px;
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.mode-tabs button {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 0;
+  color: var(--vscode-descriptionForeground);
+}
+.mode-tabs button[aria-pressed="true"] {
+  color: var(--vscode-foreground);
+  border-bottom: 1px solid var(--vscode-focusBorder);
+}
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 22px 14px;
+}
+.transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.transcript article {
+  margin: 20px 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.transcript strong {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+.transcript p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 4px 0;
+}
+.chat-view .composer {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+body.chat-mode main {
+  display: flex;
+  flex-direction: column;
+}
+body.chat-mode .workboard-scroll {
+  flex: 0 1 auto;
+  max-height: 45%;
+}

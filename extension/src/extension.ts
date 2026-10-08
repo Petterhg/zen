@@ -79,6 +79,14 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private trace: TraceJournal;
   private editor?: vscode.TextEditor;
   private history = new TranscriptHistory();
+  private conversationMode: "voice" | "chat" = "voice";
+  async beginConversation(): Promise<void> {
+    if (this.conversationMode === "voice") await this.startVoice();
+    else this.publishTranscript();
+  }
+  private publishTranscript(): void {
+    this.post({ type: "transcript", entries: this.history.snapshot() });
+  }
   private focus = new FocusTimeline();
   private targets = new RequestTargets();
   private lastEditEvent?: { status: string; file?: string };
@@ -115,6 +123,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private jobRevision = 0;
   private sessionToken = 0;
   private panelReady = false;
+  private checkpointAvailabilityRevision = 0;
   private pendingVoiceStart = false;
   private contextTimer?: ReturnType<typeof setTimeout>;
   private seenDelegations = new Set<string>();
@@ -136,6 +145,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   );
 
   async startVoice(): Promise<void> {
+    this.conversationMode = "voice";
+    this.post({ type: "conversationMode", mode: "voice" });
     this.pendingVoiceStart = true;
     await vscode.commands.executeCommand("pairCode.open");
     if (this.panelReady && this.pendingVoiceStart) {
@@ -522,6 +533,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   private post(message: object): void {
     const data = message as Record<string, unknown>;
+    if (data.type === "liveAppend" && this.conversationMode === "chat") return;
     if (
       [
         "liveAppend",
@@ -609,6 +621,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     });
   }
   private async publishConfiguration(): Promise<void> {
+    void this.publishConversationAvailability();
     void vscode.commands.executeCommand(
       "setContext",
       "zen.assistanceLevel",
@@ -792,7 +805,18 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     clearTimeout(this.contextTimer);
     this.contextTimer = setTimeout(() => this.publishContext(), 600);
   }
+  private async publishConversationAvailability(): Promise<void> {
+    const revision = ++this.checkpointAvailabilityRevision;
+    const scope = await this.memory.scope(this.snapshot()?.uri);
+    const checkpoint = await this.memory.checkpoint(scope);
+    if (revision === this.checkpointAvailabilityRevision)
+      this.post({
+        type: "conversationAvailable",
+        available: Boolean(checkpoint),
+      });
+  }
   private publishContext(urgent = false): void {
+    void this.publishConversationAvailability();
     const snapshot = this.snapshot();
     this.refreshReferences(snapshot);
     const contextId = this.focus.record(snapshot);
@@ -852,6 +876,24 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   private async handleMessage(message: PanelMessage): Promise<void> {
     try {
+      if (
+        message.type === "conversationMode" &&
+        (message.mode === "chat" || message.mode === "voice")
+      ) {
+        if (message.mode === "chat" && this.conversationMode !== "chat") {
+          this.sessionToken++;
+          this.sessionJob?.abort();
+          this.sessionJob = undefined;
+          this.pendingVoiceStart = false;
+          this.cancel();
+          this.clearPointing();
+          this.updateVoiceStatus("disconnected");
+        }
+        this.conversationMode = message.mode;
+        this.post({ type: "conversationMode", mode: this.conversationMode });
+        this.publishTranscript();
+        return;
+      }
       if (
         message.type === "voiceState" &&
         message.sessionToken === this.sessionToken &&
@@ -941,6 +983,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       if (message.type === "ready") {
         this.post({ type: "researchHistory", articles: this.research });
         await this.publishConfiguration();
+        this.post({ type: "conversationMode", mode: this.conversationMode });
+        this.publishTranscript();
         this.publishContext();
         this.panelReady = true;
         if (this.pendingVoiceStart) {
@@ -1008,12 +1052,15 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         typeof message.text === "string" &&
         message.text.trim()
       ) {
+        if (this.conversationMode !== "chat") return;
         this.trace.record({ type: "conversation.typed", text: message.text });
         this.history.entries.push({
           role: "user",
           text: message.text.slice(0, 12000),
         });
+        this.publishTranscript();
         await this.runBackend();
+        this.publishTranscript();
         return;
       }
       if (message.type === "disconnect") {
@@ -1029,6 +1076,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         message.method === "createSession" &&
         typeof message.params?.sdp === "string"
       ) {
+        if (this.conversationMode !== "voice")
+          throw new Error("Switch to Voice before starting the microphone.");
         const key = await this.key("openai");
         if (!key) throw new Error("Configure your OpenAI API key first.");
         this.sessionJob?.abort();
@@ -1102,8 +1151,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         if (
           event.type === "session.input_transcript.delta" ||
           event.type === "session.output_transcript.delta"
-        )
+        ) {
           this.history.append(event);
+          this.publishTranscript();
+        }
         if (event.type === "session.output_transcript.delta") {
           this.targets.endTurn();
           this.pointSpeech(event);
@@ -1270,6 +1321,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           }),
       });
       let result = await requestBackend({
+        conversationMode: this.conversationMode,
         provider,
         model: this.configuration().get(
           `${provider}Model`,
@@ -1459,6 +1511,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       if (checkpointId) {
         this.resumedCheckpoint = undefined;
         this.post({ type: "checkpointCleared" });
+        void this.publishConversationAvailability();
       }
       if (proposal) {
         this.reject(false);
@@ -1510,7 +1563,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.history.entries.push({
           role: "assistant",
           text: proposal
-            ? `An inline preview was prepared in ${context?.file}. No code has been applied; it awaits human acceptance.`
+            ? `${result.summary}\n\nAn inline preview was prepared in ${context?.file}. No code has been applied; it awaits human acceptance.`
             : result.summary,
         });
       this.post({
@@ -1588,7 +1641,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         "Historical reference only. Re-read current code. No old task is authorized to run, no preview is restored, accepted_unsaved is a historical buffer event, not proof of saved work or tests. Ask what to continue if unclear. Current instructions win.",
     });
   }
-  async resumePairing(): Promise<void> {
+  async resumePairing(): Promise<boolean> {
     if (
       (this.sessionJob && !this.sessionJob.signal.aborted) ||
       this.backendRunning
@@ -1596,18 +1649,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       await vscode.window.showInformationMessage(
         "Disconnect pairing and finish or cancel the current request before resuming another session.",
       );
-      return;
+      return false;
     }
     const token = this.sessionToken,
       revision = this.jobRevision;
     const scope = await this.memory.scope(this.snapshot()?.uri);
     const checkpoint = await this.memory.checkpoint(scope);
-    if (token !== this.sessionToken || revision !== this.jobRevision) return;
+    if (token !== this.sessionToken || revision !== this.jobRevision)
+      return false;
     if (!checkpoint || !scope) {
       await vscode.window.showInformationMessage(
         "No available checkpoint for this repository. Check memory/context sharing and the current file.",
       );
-      return;
+      return false;
     }
     this.cancel();
     this.history.entries = [];
@@ -1621,19 +1675,12 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       task: checkpoint.task,
       fileChanged: checkpoint.fileChanged,
     });
-    await vscode.window.showInformationMessage(
-      "Previous pairing context loaded. Start Pairing or type what to continue. Current code will be checked again.",
-    );
+    this.publishTranscript();
+    return true;
   }
   async freshPairing(): Promise<void> {
     const scope = await this.memory.scope(this.snapshot()?.uri);
-    if (!scope) {
-      await vscode.window.showInformationMessage(
-        "Open a file in the repository whose checkpoint you want to clear.",
-      );
-      return;
-    }
-    this.memory.clearCheckpoints(scope);
+    if (scope) this.memory.clearCheckpoints(scope);
     this.resumedCheckpoint = undefined;
     this.cancel();
     this.sessionJob?.abort();
@@ -1646,6 +1693,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.updateVoiceStatus("disconnected");
     this.post({ type: "stopVoice" });
     this.post({ type: "checkpointCleared" });
+    this.publishTranscript();
+    void this.publishConversationAvailability();
   }
   private invalidateMemoryContext(): void {
     this.resumedCheckpoint = undefined;
@@ -1655,6 +1704,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       /* Privacy cancellation must still proceed. Status reports persistence failure. */
     }
     this.post({ type: "checkpointCleared" });
+    this.publishTranscript();
+    void this.publishConversationAvailability();
     this.cancel();
     this.sessionJob?.abort();
     this.sessionToken++;
@@ -1956,12 +2007,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     vscode.commands.registerCommand("pairCode.endVoice", () =>
       companion.voiceControl("end"),
     ),
-    vscode.commands.registerCommand("pairCode.resumePairing", () =>
-      companion.resumePairing(),
-    ),
-    vscode.commands.registerCommand("pairCode.freshPairing", () =>
-      companion.freshPairing(),
-    ),
+    vscode.commands.registerCommand("pairCode.resumePairing", async () => {
+      if (await companion.resumePairing()) await companion.beginConversation();
+    }),
+    vscode.commands.registerCommand("pairCode.freshPairing", async () => {
+      await companion.freshPairing();
+      await companion.beginConversation();
+    }),
     vscode.commands.registerCommand("pairCode.manageMemory", () =>
       companion.manageMemory(),
     ),

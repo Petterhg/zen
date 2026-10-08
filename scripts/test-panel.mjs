@@ -38,6 +38,8 @@ try {
             inlineMode: "manual",
             shareContext: true,
           });
+        if (message.type === "conversationMode")
+          queueMicrotask(() => window.host(message));
         if (message.type === "rpc")
           queueMicrotask(() =>
             window.host({
@@ -154,6 +156,37 @@ try {
   );
   assert.equal(await page.locator("#indexProgress").isVisible(), false);
   assert.equal(await page.locator("#indexError").isVisible(), false);
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "waiting",
+      error: "Owned by process 123",
+      files: 0,
+    }),
+  );
+  assert.equal(await page.locator("#indexError").isVisible(), false);
+  assert.match(await page.locator("#indexDetail").textContent(), /unavailable/);
+  assert.doesNotMatch(
+    await page.locator("#indexDetail").textContent(),
+    /0 chunks/,
+  );
+  await page.evaluate(() =>
+    window.host({
+      type: "indexStatus",
+      state: "ready",
+      files: 8,
+      chunks: 24,
+      coverageKnown: true,
+      processed: 0,
+      embedded: 0,
+      reused: 0,
+    }),
+  );
+  assert.match(
+    await page.locator("#indexDetail").textContent(),
+    /8 files · 24 chunks stored/,
+  );
+
   assert.equal(
     await page.locator("#assistanceLevel").getAttribute("step"),
     "1",
@@ -205,6 +238,18 @@ try {
   await page.evaluate(() => {
     document.getElementById("pairingSettings").open = false;
   });
+  assert.equal(await page.locator("#resumePairing").isVisible(), false);
+  await page.evaluate(() =>
+    window.host({ type: "conversationAvailable", available: true }),
+  );
+  assert.equal(await page.locator("#resumePairing").isVisible(), true);
+  await page.locator("#resumePairing").click();
+  await page.locator("#freshPairing").click();
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some((m) => m.type === "freshPairing"),
+    ),
+  );
   const voiceBox = await page.locator(".voice-card").boundingBox();
   const sliderBox = await page.locator(".pairing-style").boundingBox();
   assert.ok(voiceBox && sliderBox && voiceBox.y < sliderBox.y);
@@ -234,7 +279,9 @@ try {
     document.getElementById("pairingSettings").open = true;
   });
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.locator("#connect").click();
+  await page.evaluate(() =>
+    window.host({ type: "voiceControl", action: "start", sessionToken: 0 }),
+  );
   await page.waitForFunction(
     () =>
       document.getElementById("voiceStatus").textContent ===
@@ -250,7 +297,7 @@ try {
   await page.locator("#toggleSettings").click();
   await page.locator("#toggleSettings").click();
   await page.locator("#manageMemory").click();
-  await page.locator("#resumePairing").click();
+  assert.equal(await page.locator("#resumePairing").isDisabled(), true);
   assert.ok(
     await page.evaluate(() =>
       window.messages.some((m) => m.type === "resumePairing"),
@@ -723,6 +770,71 @@ try {
     }),
   );
   assert.match(await page.locator("#deliveryStatus").textContent(), /8s/);
+  await page.evaluate(() =>
+    window.host({ type: "voiceControl", action: "start", sessionToken: 999 }),
+  );
+  await page.waitForFunction(() => window.peers.length === 3);
+  await page.evaluate(() =>
+    window.peers[2].channel.emit({ type: "session.started" }),
+  );
+  const peersBeforeChat = await page.evaluate(() => window.peers.length);
+  await page.locator("#chatMode").click();
+  assert.equal(await page.locator("#composer").isVisible(), true);
+  assert.ok(
+    await page.evaluate(() => window.tracks.every((track) => track.stopped)),
+    "Chat stops every microphone track",
+  );
+  assert.equal(
+    await page.locator("#voiceMode").getAttribute("aria-pressed"),
+    "false",
+  );
+  await page.locator("#message").fill("Explain this function");
+  await page.locator("#message").press("Enter");
+  assert.ok(
+    await page.evaluate(() =>
+      window.messages.some(
+        (m) => m.type === "typed" && m.text === "Explain this function",
+      ),
+    ),
+  );
+  await page.evaluate(() =>
+    window.host({
+      type: "transcript",
+      entries: [
+        { role: "user", text: "Explain this function" },
+        { role: "assistant", text: "<img src=x onerror=alert(1)>" },
+      ],
+    }),
+  );
+  assert.equal(await page.locator("#transcript article").count(), 2);
+  assert.equal(await page.locator("#transcript img").count(), 0);
+  assert.match(
+    await page.locator("#transcript").textContent(),
+    /Explain this function/,
+  );
+  await page.evaluate(() =>
+    window.host({
+      type: "configuration",
+      openaiReady: false,
+      backendReady: true,
+      provider: "groq",
+      shareContext: true,
+    }),
+  );
+  assert.equal(await page.locator("#freshPairing").isEnabled(), true);
+  assert.equal(await page.locator("#send").isEnabled(), true);
+  await page.evaluate(() => {
+    document.getElementById("pairingSettings").open = false;
+  });
+  await page.setViewportSize({ width: 380, height: 860 });
+  await page.screenshot({ path: "artifacts/native-companion/chat.png" });
+  await page.locator("#voiceMode").click();
+  assert.equal(await page.locator("#composer").isVisible(), false);
+  assert.equal(
+    await page.evaluate(() => window.peers.length),
+    peersBeforeChat,
+    "Switching modes must not reconnect voice",
+  );
   assert.deepEqual(errors, []);
   console.log(
     "Panel lifecycle passed: hidden transcripts, research sources, editor-only proposals, context ack, mute matching, old-session isolation, close usage inline controls, typing/playback coalescing, and spoken-target refresh. Simulated transport; no microphone or provider calls.",

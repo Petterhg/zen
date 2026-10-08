@@ -20,6 +20,8 @@
     sessionToken = 0,
     ready = false,
     muted = false;
+  let mode = "voice",
+    backendReady = false;
   let openaiReady = false,
     lastVoiceContext = "",
     latestContext = "";
@@ -67,7 +69,14 @@
   function setVoiceState(state) {
     const connected = state === "listening" || state === "muted";
     $("connect").classList.toggle("hidden", connected);
-    $("connect").disabled = state === "connecting" || !openaiReady;
+    $("connect").disabled =
+      state === "connecting" || !(mode === "chat" ? backendReady : openaiReady);
+    $("freshPairing").disabled =
+      state === "connecting" || !(mode === "chat" ? backendReady : openaiReady);
+    $("resumePairing").disabled =
+      connected ||
+      state === "connecting" ||
+      !(mode === "chat" ? backendReady : openaiReady);
     $("connect").textContent =
       state === "connecting" ? "Connecting…" : "Start Pairing";
     $("mute").classList.toggle("hidden", !connected);
@@ -97,6 +106,10 @@
             : "Listening · GPT-Live"
           : "Voice is disconnected";
     $("mute").textContent = muted ? "Unmute" : "Mute";
+    if (mode === "chat") {
+      $("voiceTitle").textContent = "Thinking together";
+      $("voiceStatus").textContent = "Chat · microphone off";
+    }
     post({ type: "voiceState", text: state, sessionToken });
   }
   let urgentContext = false;
@@ -191,10 +204,12 @@
     clearTimeout(startupTimer);
     microphone?.getTracks().forEach((track) => track.stop());
     microphone = undefined;
-    events?.close();
+    const oldEvents = events,
+      oldPeer = peer;
     events = undefined;
-    peer?.close();
     peer = undefined;
+    oldEvents?.close();
+    oldPeer?.close();
     $("audio").pause();
     $("audio").srcObject = null;
     ready = false;
@@ -529,31 +544,45 @@
   $("provider").addEventListener("change", () =>
     post({ type: "provider", provider: $("provider").value }),
   );
-  function boundedContext(text) {
-    const encoder = new TextEncoder();
-    let content = "";
-    let bytes = 0;
-    for (const character of text) {
-      const size = encoder.encode(character).length;
-      if (bytes + size > 480) break;
-      bytes += size;
-      content += character;
+  function renderTranscript(entries) {
+    const log = $("transcript");
+    log.replaceChildren();
+    for (const entry of entries) {
+      const item = document.createElement("article");
+      const label = document.createElement("strong");
+      label.textContent = entry.role === "user" ? "You" : "Zen";
+      const content = document.createElement("p");
+      content.textContent = entry.text;
+      item.append(label, content);
+      log.append(item);
     }
-    return content;
+    log.scrollTop = log.scrollHeight;
+  }
+  function showMode(next) {
+    mode = next;
+    $("chatView").classList.toggle("hidden", mode !== "chat");
+    document.body.classList.toggle("chat-mode", mode === "chat");
+    $("voiceMode").setAttribute("aria-pressed", String(mode === "voice"));
+    $("chatMode").setAttribute("aria-pressed", String(mode === "chat"));
+    setVoiceState(ready ? "listening" : "disconnected");
+  }
+  for (const next of ["voice", "chat"]) {
+    $(next + "Mode").addEventListener("click", () => {
+      if (mode === next) return;
+      // Close fully before allowing a text request: an old close event must not cancel it.
+      if (next === "chat") {
+        stop();
+        cleanup();
+      }
+      $("send").disabled = true;
+      post({ type: "conversationMode", mode: next });
+    });
   }
   function sendTyped() {
     const text = $("message").value.trim();
-    if (!text) return;
+    if (!text || mode !== "chat" || $("send").disabled) return;
     clearError();
     $("message").value = "";
-    sendEvent({
-      type: "session.thinking.append",
-      delegation_id: null,
-      content: boundedContext(
-        "The application is already handling this typed request; do not start duplicate work: " +
-          text,
-      ),
-    });
     post({ type: "typed", text });
   }
   $("composer").addEventListener("submit", (event) => {
@@ -570,6 +599,11 @@
     post({ type: "refreshIndex" }),
   );
   window.addEventListener("message", ({ data }) => {
+    if (data.type === "conversationMode") {
+      showMode(data.mode);
+      $("send").disabled = !backendReady;
+    }
+    if (data.type === "transcript") renderTranscript(data.entries);
     if (data.type === "indexStatus") {
       const active = ["starting", "scanning", "indexing", "updating"].includes(
         data.state,
@@ -583,6 +617,7 @@
         paused: "Code index paused",
         untrusted: "Code index waiting for workspace trust",
         error: "Code index needs attention",
+        waiting: "Index in use · retrying automatically",
       };
       $("indexStatus").textContent =
         label[data.state] || `Code index ${data.state}`;
@@ -595,21 +630,30 @@
       $("indexDetail").textContent =
         data.state === "paused"
           ? "Enable Code Index and Share Editor Context in settings to resume."
-          : data.state === "untrusted"
-            ? "Trust this workspace to enable indexing."
-            : [
-                data.repository,
-                active && data.currentFile,
-                `${data.embedded || 0} chunks embedded · ${data.reused || 0} cached chunks reused this pass`,
-                data.updatedAt &&
-                  `Updated ${new Date(data.updatedAt).toLocaleTimeString()}`,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-      $("indexError").textContent = data.error
-        ? `${data.error} Fix the cause, then press ↻ to retry.`
-        : "";
-      $("indexError").classList.toggle("hidden", !data.error);
+          : data.state === "waiting"
+            ? `${data.error} Retrying every 10 seconds. Stored totals are unavailable in this window.`
+            : data.state === "untrusted"
+              ? "Trust this workspace to enable indexing."
+              : [
+                  data.repository,
+                  active && data.currentFile,
+                  data.coverageKnown &&
+                    `${data.files} files · ${data.chunks} chunks stored`,
+                  data.processed !== undefined &&
+                    `${data.embedded ?? 0} chunks embedded · ${data.reused ?? 0} cached chunks reused this pass`,
+                  data.updatedAt &&
+                    `Updated ${new Date(data.updatedAt).toLocaleTimeString()}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+      $("indexError").textContent =
+        data.error && data.state !== "waiting"
+          ? `${data.error} Fix the cause, then press ↻ to retry.`
+          : "";
+      $("indexError").classList.toggle(
+        "hidden",
+        !data.error || data.state === "waiting",
+      );
       $("indexStatus").title =
         "Local Turso · OpenAI small / 768. Files checked includes unchanged or excluded candidates; ready shows indexed files.";
     }
@@ -624,6 +668,12 @@
     if (data.type === "taskIntent") {
       $("taskIntentText").textContent = String(data.text ?? "").slice(0, 320);
       $("taskIntent").classList.toggle("hidden", !data.text);
+    }
+    if (data.type === "conversationAvailable") {
+      $("resumePairing").classList.toggle("hidden", !data.available);
+      $("resumePairing").title = data.available
+        ? "Load saved context; current files will be checked again"
+        : "";
     }
     if (data.type === "checkpointLoaded") {
       $("checkpointNote").textContent =
@@ -641,7 +691,14 @@
     }
     if (data.type === "configuration") {
       openaiReady = data.openaiReady;
+      backendReady = data.backendReady;
+      $("send").disabled = !backendReady;
       $("connect").disabled = !openaiReady;
+      $("freshPairing").disabled = !(mode === "chat"
+        ? backendReady
+        : openaiReady);
+      $("resumePairing").disabled =
+        ready || !(mode === "chat" ? backendReady : openaiReady);
       $("provider").value = data.provider;
       $("inlineMode").value = data.inlineMode ?? "manual";
       $("assistanceLevel").value = data.assistanceLevel ?? 25;
@@ -691,7 +748,8 @@
     if (data.type === "stopVoice") {
       $("taskIntentText").textContent = "";
       $("taskIntent").classList.add("hidden");
-      stop();
+      if (peer) stop();
+      else cleanup();
     }
     // Starting a new session cannot use the previous transport token: the host
     // increments it on disconnect. Mute/end still target only the current session.
@@ -700,7 +758,8 @@
       data.action === "start" &&
       (!peer || closing)
     ) {
-      $("connect").click();
+      showMode("voice");
+      void start();
     }
     if (data.type === "voiceControl" && data.sessionToken === sessionToken) {
       if (data.action === "mute") $("mute").click();

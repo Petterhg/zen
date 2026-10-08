@@ -30,6 +30,14 @@ export interface IndexFilter {
   scope?: string;
   language?: string;
 }
+export class IndexBusyError extends Error {
+  constructor(public readonly ownerPid?: number) {
+    super(
+      `This checkout index is already owned by another Zen window${ownerPid ? ` (process ${ownerPid})` : ""}. Waiting for that window to release it.`,
+    );
+    this.name = "IndexBusyError";
+  }
+}
 /** One owner and serialized DB operations: Turso transactions never interleave. */
 export class CodeIndex {
   private queue: Promise<unknown> = Promise.resolve();
@@ -51,18 +59,17 @@ export class CodeIndex {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       let alive = true;
+      let ownerPid: number | undefined;
       try {
         const pid = Number(await readFile(path.join(lock, "pid"), "utf8"));
         if (!Number.isInteger(pid) || pid < 1)
           throw new Error("Invalid index lock.");
+        ownerPid = pid;
         process.kill(pid, 0);
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code === "ESRCH") alive = false;
       }
-      if (alive)
-        throw new Error(
-          "This checkout index is already owned by another Pair window. Use its index, or close that window and refresh here.",
-        );
+      if (alive) throw new IndexBusyError(ownerPid);
       await rm(lock, { recursive: true, force: true });
       await mkdir(lock);
     }
@@ -89,6 +96,13 @@ export class CodeIndex {
     const next = this.queue.then(run, run);
     this.queue = next.catch(() => {});
     return next;
+  }
+  async stats(): Promise<{ files: number; chunks: number }> {
+    return this.serial(async () => {
+      const [files] = await this.db.all("SELECT COUNT(*) AS n FROM files");
+      const [chunks] = await this.db.all("SELECT COUNT(*) AS n FROM chunks");
+      return { files: Number(files.n), chunks: Number(chunks.n) };
+    });
   }
   async services(): Promise<string[]> {
     return this.serial(async () =>

@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { CodeIndex, type IndexHit } from "./code-index.js";
+import { CodeIndex, IndexBusyError, type IndexHit } from "./code-index.js";
 import { CodeChunker, digest } from "./code-chunks.js";
 import { openAIEmbed, type Embed } from "./embeddings.js";
 import { WorkspaceDiscovery, type DiscoveryRoot } from "./discovery.js";
@@ -27,6 +27,8 @@ interface RootIndex {
 export interface IndexStatus {
   state: string;
   files: number;
+  chunks?: number;
+  coverageKnown?: boolean;
   embedded: number;
   reused: number;
   error?: string;
@@ -126,6 +128,12 @@ export class IndexService implements vscode.Disposable {
     this.job = this.run(signal)
       .catch((e) => {
         if (!signal.aborted) {
+          if (e instanceof IndexBusyError) {
+            this.full = true;
+            this.status.coverageKnown = false;
+            this.publish("waiting", e.message);
+            return;
+          }
           this.full = false;
           this.pending.clear();
           this.publish(
@@ -136,6 +144,11 @@ export class IndexService implements vscode.Disposable {
       })
       .finally(() => {
         this.job = undefined;
+        if (!this.lifetime.signal.aborted && this.status.state === "waiting") {
+          clearTimeout(this.timer);
+          this.timer = setTimeout(() => this.start(), 10000);
+          return;
+        }
         if (!this.lifetime.signal.aborted && (this.full || this.pending.size))
           this.schedule();
       });
@@ -331,8 +344,13 @@ export class IndexService implements vscode.Disposable {
       await this.drain(signal);
     }
     this.status.files = 0;
-    for (const entry of this.roots.values())
-      this.status.files += (await (await entry.index).paths()).length;
+    this.status.chunks = 0;
+    for (const entry of this.roots.values()) {
+      const totals = await (await entry.index).stats();
+      this.status.files += totals.files;
+      this.status.chunks += totals.chunks;
+    }
+    this.status.coverageKnown = true;
     this.status.currentFile = undefined;
     this.publish("ready");
   }
@@ -563,5 +581,6 @@ export class IndexService implements vscode.Disposable {
       } catch {
         /* Already reported by index status. */
       }
+    this.roots.clear();
   }
 }

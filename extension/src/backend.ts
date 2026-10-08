@@ -33,6 +33,7 @@ export interface BackendTool {
   ) => Promise<unknown>;
 }
 export interface Options {
+  conversationMode?: "voice" | "chat";
   timeoutMs?: number;
   instructions?: string;
   taskState?: unknown;
@@ -329,7 +330,10 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
       : options.signal;
   const opts = { ...options, signal };
   const instructions =
-    options.instructions ?? backendInstructions(options.assistanceLevel);
+    (options.instructions ?? backendInstructions(options.assistanceLevel)) +
+    (options.conversationMode === "chat"
+      ? "\nThe human is using text chat with the microphone disconnected. Address the human directly in the summary; provide the explanation they need without referring to a speaker or voice handoff. Continue to put code changes in inline edit proposals, obey assistance level zero, and never claim an unapplied preview changed a file."
+      : "");
   const messages: Message[] = [
     { role: "system", content: instructions },
     ...options.history.map((e) => ({ role: e.role, content: e.text })),

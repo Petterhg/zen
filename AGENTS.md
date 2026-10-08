@@ -10,7 +10,7 @@ Collaboration with colleagues, project/issue boards, delivery pipelines and dedi
 
 ## Product invariants
 
-- The editor is the main work surface. Proposals belong inline, not as code dumps in chat. Transcripts are optional local diagnostics.
+- The editor is the main work surface. Proposals belong inline, not as code dumps in chat. Transcripts live in the optional Chat / transcript view, whose composer talks directly to the backend with voice disconnected.
 - Assistance level zero means voice guidance only: no code proposals or automatic insertion. Higher levels change how much to propose, not whether stale buffers may be overwritten.
 - Typing, navigation and slider changes must not interrupt speech or cancel useful research. Spoken interruptions, explicit cancellation, disconnect and privacy changes have distinct lifecycles.
 - Capture the requested file/selection/version. Switching tabs must not retarget an in-flight edit. Reject stale proposals and preserve undo and explicit acceptance.

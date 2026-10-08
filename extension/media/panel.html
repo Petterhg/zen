@@ -18,7 +18,15 @@
         <h1 id="voiceTitle">Ready when you are</h1>
         <p id="voiceDescription">Start when you’re ready.</p>
         <div class="session-controls">
-          <button id="connect" class="primary">Start Pairing</button>
+          <button id="connect" class="primary legacy-connect" hidden>
+            Connect voice
+          </button>
+          <div class="conversation-actions">
+            <button id="freshPairing" class="secondary">Start new</button
+            ><button id="resumePairing" class="primary hidden">
+              Continue conversation
+            </button>
+          </div>
           <button id="mute" class="secondary hidden">Mute</button>
           <button
             id="disconnect"
@@ -58,6 +66,10 @@
         </button>
       </div>
     </header>
+    <nav class="mode-tabs" aria-label="Conversation mode">
+      <button id="voiceMode" aria-pressed="true">Voice</button
+      ><button id="chatMode" aria-pressed="false">Chat / transcript</button>
+    </nav>
     <main>
       <div class="workboard-scroll">
         <section class="pairing-style" aria-label="Pairing style">
@@ -116,28 +128,12 @@
           <summary>Pairing settings</summary>
           <h2 class="settings-title">Pairing settings</h2>
           <span id="workspaceLabel" hidden></span>
-          <form id="composer" class="composer">
-            <label for="message" class="sr-only">Message your pair</label
-            ><textarea
-              id="message"
-              rows="1"
-              placeholder="Or type a request…"
-            ></textarea
-            ><button
-              class="send-button"
-              id="send"
-              aria-label="Send message"
-              title="Send message"
-            >
-              ↑
-            </button>
-          </form>
           <p id="deliveryStatus" class="stale" aria-live="polite"></p>
           <div id="setup" class="setup-note">
             <span>Connect your models to begin.</span
             ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
           </div>
-          <span class="eyebrow block-label">IN FOCUS</span>
+          <span class="eyebrow block-label">SHARED EDITOR CONTEXT</span>
           <section class="context-bar" aria-label="Shared editor context">
             <span class="file-icon" aria-hidden="true">⌘</span
             ><span id="contextFile">No shared file</span
@@ -189,12 +185,7 @@
               <option value="automatic">Automatic</option>
             </select>
           </div>
-          <div class="settings-row">
-            <button id="resumePairing" class="text-button">
-              Resume previous pairing
-            </button>
-            <button id="freshPairing" class="text-button">Start fresh</button>
-          </div>
+          <div class="settings-row"></div>
           <div class="settings-row">
             <label
               ><input type="checkbox" id="shareContext" checked /> Share editor
@@ -226,6 +217,30 @@
           </footer>
         </details>
       </div>
+      <section id="chatView" class="chat-view hidden" aria-label="Conversation">
+        <div
+          id="transcript"
+          class="transcript"
+          role="log"
+          aria-label="Conversation transcript"
+        ></div>
+        <form id="composer" class="composer">
+          <label for="message" class="sr-only">Message your pair</label
+          ><textarea
+            id="message"
+            rows="1"
+            placeholder="Message your pair…"
+          ></textarea
+          ><button
+            class="send-button"
+            id="send"
+            aria-label="Send message"
+            title="Send message"
+          >
+            ↑
+          </button>
+        </form>
+      </section>
     </main>
     <script nonce="{{nonce}}" src="{{protocol}}"></script>
     <script nonce="{{nonce}}" src="{{js}}"></script>

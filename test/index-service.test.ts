@@ -118,6 +118,23 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
     assert.equal(service.status.state, "ready", service.status.error);
   };
   await ready();
+  assert.equal(service.status.coverageKnown, true);
+  assert.ok((service.status.chunks ?? 0) > 0);
+  const contender = new mod.exports.IndexService!(
+    {
+      extensionPath: path.resolve(import.meta.dirname, "../extension"),
+      globalStorageUri: { fsPath: storage },
+    } as never,
+    async () => "fake",
+    () => enabled,
+    () => {},
+  );
+  t.after(() => contender.dispose());
+  await new Promise((r) => setTimeout(r, 1600));
+  assert.equal(contender.status.state, "waiting");
+  assert.equal(contender.status.coverageKnown, false);
+  await contender.dispose();
+
   assert.equal(service.status.files, 1);
   assert.ok(statuses.some((s) => s.state === "scanning"));
   assert.ok(
@@ -170,4 +187,28 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
   await new Promise((r) => setTimeout(r, 1400));
   await ready();
   assert.equal(service.status.files, 0);
+
+  const waiting = new mod.exports.IndexService!(
+    {
+      extensionPath: path.resolve(import.meta.dirname, "../extension"),
+      globalStorageUri: { fsPath: storage },
+    } as never,
+    async () => "fake",
+    () => enabled,
+    () => {},
+  );
+  t.after(() => waiting.dispose());
+  await new Promise((r) => setTimeout(r, 1600));
+  assert.equal(waiting.status.state, "waiting");
+  await service.dispose();
+  const retryDeadline = Date.now() + 13000;
+  while (String(waiting.status.state) !== "ready" && Date.now() < retryDeadline)
+    await new Promise((r) => setTimeout(r, 100));
+  assert.equal(
+    waiting.status.state,
+    "ready",
+    "a waiting window automatically takes ownership after release",
+  );
+  assert.equal(waiting.status.coverageKnown, true);
+  await waiting.dispose();
 });
