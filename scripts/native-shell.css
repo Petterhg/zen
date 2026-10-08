@@ -62,3 +62,102 @@
 .monaco-workbench .part.panel {
   box-shadow: none;
 }
+
+/* The reference's inset file surface, with geometry owned by zenLayoutGroup. */
+.monaco-workbench .zen-file-heading {
+  box-sizing: border-box;
+  padding-top: 22px;
+  overflow: hidden;
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+}
+.monaco-workbench .zen-eyebrow {
+  font:
+    500 9px/16px -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  letter-spacing: 1.3px;
+  color: var(--vscode-descriptionForeground);
+}
+.monaco-workbench .zen-file-heading h2 {
+  margin: 6px 0 5px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 500;
+  letter-spacing: -0.35px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.monaco-workbench .zen-file-heading p {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.monaco-workbench .zen-file-heading.compact {
+  padding-top: 6px;
+}
+.monaco-workbench .zen-file-heading.compact .zen-eyebrow,
+.monaco-workbench .zen-file-heading.compact p {
+  display: none;
+}
+.monaco-workbench .part.editor::after {
+  box-shadow: none !important;
+}
+.monaco-workbench
+  .part.editor
+  > .content
+  .editor-group-container
+  > .title
+  .tabs-container
+  > .tab {
+  border-radius: 0;
+  border-right: 0 !important;
+  font-size: 11px;
+}
+.monaco-workbench
+  .part.editor
+  > .content
+  .editor-group-container
+  > .title
+  .tabs-container
+  > .tab
+  .tab-label {
+  line-height: inherit;
+}
+.monaco-workbench .part.sidebar > .title > .title-label h2,
+.monaco-workbench .part.auxiliarybar > .title > .title-label h2 {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+}
+.monaco-workbench .part.sidebar .monaco-list-row {
+  border-radius: 0;
+}
+.monaco-workbench .part.sidebar .monaco-list-row.selected {
+  box-shadow: inset 2px 0 var(--vscode-focusBorder);
+}
+.monaco-workbench .part.panel > .title {
+  padding-left: 24px;
+  padding-right: 20px;
+}
+.monaco-workbench .part.statusbar {
+  font-size: 9px;
+}
+.monaco-workbench .part.titlebar .titlebar-left::after {
+  content: "◯  zen";
+  position: absolute;
+  left: 82px;
+  top: 12px;
+  color: var(--vscode-foreground);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -1px;
+  pointer-events: none;
+}

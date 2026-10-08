@@ -18,7 +18,7 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font: 12px/1.65
+  font: 12px/1.85
     var(
       --vscode-font-family,
       -apple-system,
@@ -49,8 +49,8 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 .identity {
-  height: 42px;
-  padding: 0 16px;
+  height: 94px;
+  padding: 20px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -69,7 +69,7 @@ summary:focus-visible {
   gap: 2px;
 }
 main {
-  height: calc(100dvh - 42px);
+  height: calc(100dvh - 94px);
   min-height: 230px;
   display: flex;
   flex-direction: column;
@@ -79,7 +79,7 @@ main {
   flex: 1;
   overflow: auto;
   min-height: 0;
-  padding: 14px 16px 10px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
 }
@@ -116,7 +116,7 @@ main {
   background: var(--button);
   color: var(--button-text);
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 7px 13px;
   font-weight: 500;
 }
@@ -127,12 +127,12 @@ main {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 6px 12px;
 }
 .context-bar {
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -197,7 +197,7 @@ main {
   margin: 12px 0;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--surface);
 }
 .research-page summary {
@@ -230,7 +230,7 @@ main {
   padding: 10px 11px;
   background: var(--surface);
   border: 1px solid var(--red);
-  border-radius: 5px;
+  border-radius: 4px;
   margin-bottom: 10px;
   overflow-wrap: anywhere;
 }
@@ -360,7 +360,7 @@ select {
   cursor: pointer;
 }
 .code-index {
-  margin-top: auto;
+  margin-top: 24px;
   border-top: 1px solid var(--line);
   padding: 8px 0;
 }
@@ -500,4 +500,101 @@ h1 {
   border-top: 1px solid var(--line);
   margin-top: 12px;
   padding: 12px 0 8px;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+.board-identity {
+  min-width: 0;
+}
+.board-identity h2 {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 450;
+  letter-spacing: -0.2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.block-label {
+  display: block;
+  margin-bottom: 12px;
+}
+.identity {
+  border-bottom: 0;
+  gap: 10px;
+}
+.context-bar {
+  border: 0;
+  padding: 0;
+  min-height: 26px;
+}
+#contextFile {
+  font-family: inherit;
+  font-size: 13px;
+}
+.session-note {
+  padding: 14px 16px;
+  border-left: 2px solid var(--accent);
+  background: var(--vscode-button-secondaryBackground);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 24px 0;
+}
+.pairing-style {
+  margin-top: 26px;
+  border: 0;
+}
+.pairing-style-heading {
+  font-size: 11px;
+}
+.pairing-settings {
+  margin-top: 14px;
+}
+.primary {
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 11px;
+  padding: 8px 13px;
+}
+.primary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+.voice-card {
+  margin: 0 24px 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.voice-mark {
+  top: 45px;
+  right: 18px;
+}
+.voice-card h1 {
+  font-size: 12px;
+}
+.code-index {
+  font-size: 10px;
+  padding-top: 16px;
+}
+.composer {
+  margin-top: 18px;
+  background: transparent;
+}
+@media (max-height: 650px) {
+  .identity {
+    height: 64px;
+    padding: 10px 20px;
+  }
+  main {
+    height: calc(100dvh - 64px);
+  }
+  .workboard-scroll {
+    padding: 14px 20px;
+  }
+  .voice-card {
+    margin: 0 20px 12px;
+  }
 }

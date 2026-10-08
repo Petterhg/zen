@@ -82,7 +82,7 @@
       ? muted
         ? "Microphone muted"
         : "Pairing together"
-      : "Voice pairing";
+      : "Ready when you are";
     $("voiceDescription").textContent = connected
       ? muted
         ? "Your microphone is muted."

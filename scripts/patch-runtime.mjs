@@ -1,3 +1,4 @@
+import { ensureRuntimeSignature } from "./runtime-signing.mjs";
 import { applyRuntimeShell } from "./native-shell.mjs";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -99,10 +100,7 @@ for (const [key, value] of Object.entries({
   }
 }
 // This is a local development application, not a notarized distributable.
-if (existsSync(app))
-  execFileSync("codesign", ["--force", "--deep", "--sign", "-", app], {
-    stdio: "inherit",
-  });
+if (existsSync(app)) ensureRuntimeSignature(app);
 console.log(
   "Patched isolated runtime: Zen branding and audio-only access for the pairing panel.",
 );

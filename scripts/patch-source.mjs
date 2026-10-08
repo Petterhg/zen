@@ -1,3 +1,4 @@
+import { patchSourceLayout } from "./native-layout.mjs";
 import { applyNativeShell } from "./native-shell.mjs";
 import { readFileSync, writeFileSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -88,6 +89,7 @@ writeFileSync(
     `script-src 'sha256-${scriptHash}'`,
   ),
 );
+patchSourceLayout(source);
 applyNativeShell(path.join(source, "src/vs/workbench/browser/media/style.css"));
 const productPath = path.join(source, "product.json");
 const product = JSON.parse(readFileSync(productPath, "utf8"));

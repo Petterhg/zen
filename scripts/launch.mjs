@@ -1,3 +1,4 @@
+import { ensureRuntimeSignature } from "./runtime-signing.mjs";
 import { applyRuntimeShell } from "./native-shell.mjs";
 import { existsSync, mkdirSync, writeFileSync, cpSync } from "node:fs";
 import { spawn, execFileSync } from "node:child_process";
@@ -63,17 +64,7 @@ applyRuntimeShell(
   path.join(root, ".runtime/VSCodium.app/Contents/Resources/app"),
 );
 if (process.platform === "darwin")
-  execFileSync(
-    "codesign",
-    [
-      "--force",
-      "--deep",
-      "--sign",
-      "-",
-      path.join(root, ".runtime/VSCodium.app"),
-    ],
-    { stdio: "inherit" },
-  );
+  ensureRuntimeSignature(path.join(root, ".runtime/VSCodium.app"));
 const args = [
   "--new-window",
   "--user-data-dir",

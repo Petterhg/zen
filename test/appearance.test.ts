@@ -39,9 +39,18 @@ test("appearance migration preserves user choices and seeds missing defaults", (
     assert.equal(readFileSync(file, "utf8"), first);
     writeFileSync(
       file,
-      JSON.stringify({ "workbench.colorTheme": "Pair Graphite" }),
+      JSON.stringify({
+        "workbench.colorTheme": "Pair Graphite",
+        "editor.fontFamily": "SF Mono, Menlo, Consolas, monospace",
+        "terminal.integrated.fontFamily": "Custom Mono",
+        "window.density.editorTabHeight": "compact",
+      }),
     );
     apply();
+    const migrated = JSON.parse(readFileSync(file, "utf8"));
+    assert.match(migrated["editor.fontFamily"], /Courier New/);
+    assert.equal(migrated["terminal.integrated.fontFamily"], "Custom Mono");
+    assert.equal(migrated["window.density.editorTabHeight"], "default");
     assert.equal(
       JSON.parse(readFileSync(file, "utf8"))["workbench.colorTheme"],
       "Zen Dark",

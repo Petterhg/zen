@@ -10,7 +10,10 @@
   </head>
   <body>
     <header class="identity">
-      <span class="workspace-name" id="workspaceLabel">Your workspace</span>
+      <div class="board-identity">
+        <span class="eyebrow">YOUR PAIR</span>
+        <h2 id="workspaceLabel">Your workspace</h2>
+      </div>
       <div class="header-actions">
         <button
           id="switchTheme"
@@ -41,6 +44,7 @@
     </header>
     <main>
       <div class="workboard-scroll">
+        <span class="eyebrow block-label">IN FOCUS</span>
         <section class="context-bar" aria-label="Shared editor context">
           <span class="file-icon" aria-hidden="true">⌘</span
           ><span id="contextFile">No shared file</span
@@ -50,7 +54,7 @@
           <span>Connect your models to begin.</span
           ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
         </div>
-        <p id="checkpointNote" class="quiet-note hidden" role="status"></p>
+        <p id="checkpointNote" class="session-note hidden" role="status"></p>
         <section
           id="researchSection"
           class="research hidden"
@@ -100,6 +104,7 @@
           ><button id="cancel" class="text-button">Stop</button>
         </div>
         <section class="pairing-style" aria-label="Pairing style">
+          <span class="eyebrow block-label">WORKING AGREEMENT</span>
           <div class="pairing-style-heading">
             <label for="assistanceLevel">Assistance</label
             ><output id="assistanceLabel" for="assistanceLevel"
@@ -197,7 +202,8 @@
         <div class="voice-mark" id="voiceMark" aria-hidden="true">
           <i></i><i></i><i></i><i></i><i></i>
         </div>
-        <h1 id="voiceTitle">Voice pairing</h1>
+        <span class="eyebrow block-label">PAIRING SESSION</span>
+        <h1 id="voiceTitle">Ready when you are</h1>
         <p id="voiceDescription">Start when you’re ready.</p>
         <div class="session-controls">
           <button id="connect" class="primary">Start Pairing</button>

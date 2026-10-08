@@ -1,3 +1,4 @@
+import { patchRuntimeLayout } from "./native-layout.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -22,6 +23,7 @@ export function applyNativeShell(cssFile) {
 }
 
 export function applyRuntimeShell(resources) {
+  patchRuntimeLayout(resources);
   applyNativeShell(
     path.join(resources, "out/vs/workbench/workbench.desktop.main.css"),
   );

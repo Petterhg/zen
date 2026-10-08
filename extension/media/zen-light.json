@@ -22,8 +22,8 @@
     "statusBar.noFolderBackground": "#ecece5",
     "titleBar.activeBackground": "#ecece5",
     "titleBar.inactiveBackground": "#ecece5",
-    "editorGroupHeader.tabsBackground": "#ecece5",
-    "tab.inactiveBackground": "#ecece5",
+    "editorGroupHeader.tabsBackground": "#f4f3ee",
+    "tab.inactiveBackground": "#f4f3ee",
     "panel.background": "#ecece5",
     "terminal.background": "#ecece5",
     "sideBar.foreground": "#424b40",
@@ -34,12 +34,12 @@
     "sideBarSectionHeader.border": "#d7dcd0",
     "statusBar.border": "#d7dcd0",
     "titleBar.border": "#d7dcd0",
-    "tab.border": "#d7dcd0",
+    "tab.border": "#00000000",
     "editorGroup.border": "#d7dcd0",
     "panel.border": "#d7dcd0",
     "tab.activeBackground": "#f4f3ee",
-    "tab.activeBorder": "#00000000",
-    "tab.activeBorderTop": "#436138",
+    "tab.activeBorder": "#436138",
+    "tab.activeBorderTop": "#00000000",
     "panelTitle.activeBorder": "#436138",
     "input.background": "#f9f9f4",
     "dropdown.background": "#f9f9f4",
@@ -93,7 +93,8 @@
     "terminal.ansiBrightMagenta": "#84539b",
     "terminal.ansiBrightWhite": "#424b40",
     "terminalCursor.foreground": "#436138",
-    "textCodeBlock.background": "#f9f9f4"
+    "textCodeBlock.background": "#f9f9f4",
+    "breadcrumb.background": "#f4f3ee"
   },
   "tokenColors": [
     {
