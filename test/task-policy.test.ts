@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   decideEffort,
+  quickQuestion,
+  questionSymbol,
   webResearchForbidden,
   providerDiagnostic,
 } from "../extension/src/task-policy.js";
@@ -32,6 +34,38 @@ const base = {
   apiKey: "fake",
   signal: new AbortController().signal,
 };
+test("only narrow conversational questions skip the remote reasoning router", () => {
+  assert.equal(
+    questionSymbol("Could you please what does authenticate_api() do?"),
+    "authenticate_api",
+  );
+  assert.equal(questionSymbol("What does this do?"), undefined);
+  assert.equal(questionSymbol("Explain this file"), undefined);
+  for (const text of [
+    "Hello!",
+    "Explain this file.",
+    "Please describe the selected function?",
+    "What does this method do?",
+    "What does authenticate_api do?",
+    "What file am I in?",
+    "Can you explain this file?",
+    "What does this do?",
+  ])
+    assert.equal(quickQuestion(text), true, text);
+  for (const text of [
+    "Explain this service",
+    "Explain this file and all downstream effects",
+    "What does this function do if two requests race?",
+    "Explore services/gateway",
+    "Why does this function fail?",
+    "Fix this line",
+    "Try again",
+    "Compare the current file with the deployed version",
+    "Remember that I prefer small functions",
+    "Vad gör tjänsten?",
+  ])
+    assert.equal(quickQuestion(text), false, text);
+});
 test("locally captured target survives navigation; completed human line is visible without an ACK", () => {
   const targets = new RequestTargets();
   targets.append({ start_ms: 100, end_ms: 300, delta: "implement" }, context);

@@ -15,6 +15,7 @@ import {
   compactResearchContext,
   hasFreshService,
   orientationSeed,
+  focusedSymbolEvidence,
 } from "../extension/src/working-context.js";
 import {
   ResearchBriefs,
@@ -22,6 +23,111 @@ import {
 } from "../extension/src/research-briefs.js";
 import { explorationTool } from "../extension/src/exploration.js";
 const signal = () => new AbortController().signal;
+test("focused symbol questions route one unique local declaration with bounded numbered source", async () => {
+  const context: EditorContext = {
+    uri: "file:///demo/services/gateway/main.py",
+    file: "services/gateway/main.py",
+    version: 3,
+    language: "python",
+    text: "from .auth import authenticate\n",
+    selection: "",
+    selectionStart: 0,
+    selectionEnd: 0,
+    diagnostics: [],
+  };
+  let searches = 0,
+    reads = 0;
+  let matches = [
+    {
+      path: "services/gateway/auth.py",
+      line: 15,
+      text: "async def authenticate(request):",
+    },
+  ];
+  let complete = true;
+  const tools = [
+    {
+      name: "search_text",
+      description: "scoped",
+      parameters: {},
+      execute: async (args: Record<string, unknown>) => {
+        searches++;
+        assert.deepEqual(args, {
+          query: "authenticate",
+          scope: "services/gateway",
+        });
+        return { matches, complete };
+      },
+    },
+    {
+      name: "read_files",
+      description: "read",
+      parameters: {},
+      execute: async (args: Record<string, unknown>) => {
+        reads++;
+        assert.deepEqual(args, {
+          files: [
+            { path: "services/gateway/auth.py", start_line: 7, end_line: 86 },
+          ],
+        });
+        return {
+          files: [
+            {
+              path: "services/gateway/auth.py",
+              hash: "a".repeat(64),
+              version: 4,
+              unsaved: true,
+              lines: "15: async def authenticate(request):",
+              startLine: 7,
+              endLine: 40,
+            },
+          ],
+        };
+      },
+    },
+  ];
+  const source = (await focusedSymbolEvidence(
+    "authenticate",
+    context,
+    tools,
+    signal(),
+  )) as { unsaved: boolean; version: number; lines: string; coverage: string };
+  assert.equal(source.unsaved, true);
+  assert.equal(source.version, 4);
+  assert.match(source.lines, /15: async def authenticate/);
+  assert.match(source.coverage, /Not a complete call graph/);
+  assert.equal(reads, 1);
+  complete = false;
+  assert.equal(
+    await focusedSymbolEvidence("authenticate", context, tools, signal()),
+    undefined,
+  );
+  complete = true;
+  matches = [
+    ...matches,
+    {
+      path: "services/gateway/other.py",
+      line: 21,
+      text: "def authenticate():",
+    },
+  ];
+  assert.equal(
+    await focusedSymbolEvidence("authenticate", context, tools, signal()),
+    undefined,
+  );
+  assert.equal(reads, 1);
+  const before = searches;
+  assert.equal(
+    await focusedSymbolEvidence(
+      "authenticate",
+      { ...context, text: "def authenticate():\n    return 1" },
+      tools,
+      signal(),
+    ),
+    undefined,
+  );
+  assert.equal(searches, before);
+});
 test("orientation routes within the active service and prioritizes source over inventories", () => {
   assert.equal(
     serviceScope("mono/services/gateway/src/retry.ts"),

@@ -3,6 +3,61 @@ import path from "node:path";
 import type { BackendTool } from "./backend.js";
 import type { ResearchBrief, ServiceBrief } from "./research-briefs.js";
 
+/** One cheap scoped definition lookup can avoid several model discovery rounds.
+ * Ambiguous/missing/truncated searches never prove that a definition is absent.
+ */
+export async function focusedSymbolEvidence(
+  symbol: string | undefined,
+  context: EditorContext,
+  tools: BackendTool[],
+  signal: AbortSignal,
+): Promise<unknown> {
+  if (!symbol || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(symbol)) return;
+  const declaration = new RegExp(
+    `^\\s*(?:(?:export|default|pub|async)\\s+)*(?:def|function|class|fn|const|let)\\s+${symbol}\\b`,
+  );
+  if (context.text.split("\n").some((line) => declaration.test(line))) return;
+  const search = tools.find((t) => t.name === "search_text"),
+    reader = tools.find((t) => t.name === "read_files");
+  if (!search || !reader) return;
+  const scope = serviceScope(context.file);
+  const page = (await search.execute({ query: symbol, scope }, signal)) as {
+    matches?: { path: string; line: number; text: string }[];
+    complete?: boolean;
+  };
+  signal.throwIfAborted();
+  if (page.complete !== true) return; // Do not pick one of multiple definitions on a partial page.
+  const candidates = (page.matches ?? []).filter(
+    (m) =>
+      typeof m.path === "string" &&
+      /\.(?:py|[cm]?[jt]sx?|rs)$/.test(m.path) &&
+      (scope === "." || m.path.startsWith(scope + "/")) &&
+      Number.isInteger(m.line) &&
+      m.line > 0 &&
+      typeof m.text === "string" &&
+      declaration.test(m.text),
+  );
+  const unique = [
+    ...new Map(candidates.map((m) => [m.path + ":" + m.line, m])).values(),
+  ];
+  if (unique.length !== 1) return;
+  const match = unique[0],
+    start = Math.max(1, match.line - 8);
+  const result = (await reader.execute(
+    { files: [{ path: match.path, start_line: start, end_line: start + 79 }] },
+    signal,
+  )) as { files?: Record<string, unknown>[] };
+  signal.throwIfAborted();
+  const source = result.files?.[0];
+  return source && !source.error
+    ? {
+        ...source,
+        coverage:
+          "One scoped literal declaration and bounded source excerpt. Not a complete call graph or runtime-resolution proof; inspect missing ranges/dependencies if needed.",
+      }
+    : undefined;
+}
+
 /** Number model-visible source only; captured text stays raw for edit-anchor validation. */
 export function numberedEditorReference(context?: EditorContext) {
   if (!context || !Number.isInteger(context.textStartLine)) return context;

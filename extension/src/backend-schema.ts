@@ -31,6 +31,19 @@ export const INLINE_SCHEMA = {
   required: ["insertion"],
 };
 
+/** Internal read-only first pass. A source gap escalates to the normal tool loop. */
+export const CONTEXT_ANSWER_SCHEMA = {
+  ...BACKEND_SCHEMA,
+  properties: {
+    ...BACKEND_SCHEMA.properties,
+    status: {
+      type: "string",
+      enum: ["answer", "clarification", "needs_context"],
+    },
+    edits: { ...BACKEND_SCHEMA.properties.edits, maxItems: 0 },
+  },
+};
+
 export function backendSchema(level?: number) {
   if (assistanceLevel(level) !== 0) return BACKEND_SCHEMA;
   return {

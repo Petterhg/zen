@@ -12,6 +12,295 @@ const answer = {
   speech: "Start with a tiny app and one health endpoint.",
   edits: [],
 };
+test("a complete structured answer with tools available avoids a redundant model call", async () => {
+  let requests = 0;
+  const events: TraceEvent[] = [];
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    history: [{ role: "user", text: "What does this file do?" }],
+    effort: "none",
+    tools: [
+      {
+        name: "read_file",
+        description: "read",
+        parameters: {},
+        execute: async () => {
+          throw Error("Unexpected lookup");
+        },
+      },
+    ],
+    signal: new AbortController().signal,
+    onTrace: (e) => events.push(e),
+    fetchImpl: (async (_url, init) => {
+      requests++;
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.reasoning_effort, "none");
+      return Response.json({
+        choices: [{ message: { content: JSON.stringify(answer) } }],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(requests, 1);
+  assert.equal(result.summary, answer.summary);
+  assert.ok(events.some((e) => e.type === "backend.direct_result"));
+});
+test("a focused source question uses one read-only structured call, with no tools executed", async () => {
+  let calls = 0;
+  const events: TraceEvent[] = [];
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    history: [{ role: "user", text: "Explain this file." }],
+    responseStyle: "brief",
+    assistanceLevel: 75,
+    signal: new AbortController().signal,
+    tools: [
+      {
+        name: "read_file",
+        description: "read",
+        parameters: {},
+        execute: async () => {
+          throw Error("Should use captured source");
+        },
+      },
+    ],
+    onTrace: (e) => events.push(e),
+    fetchImpl: (async (_url, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.tools, undefined);
+      assert.equal(body.reasoning_effort, "none");
+      assert.equal(
+        body.response_format.json_schema.schema.properties.edits.maxItems,
+        0,
+      );
+      assert.ok(
+        body.response_format.json_schema.schema.properties.status.enum.includes(
+          "needs_context",
+        ),
+      );
+      assert.match(body.messages[0].content, /READ-ONLY CONTEXT ANSWER/);
+      return Response.json({
+        choices: [{ message: { content: JSON.stringify(answer) } }],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.summary, answer.summary);
+  assert.ok(events.some((e) => e.type === "backend.context_answer"));
+});
+test("missing source and invalid read-only previews escalate to the full tool path without executing edits", async () => {
+  for (const initial of [
+    {
+      status: "needs_context",
+      summary: "Read the imported handler.",
+      edits: [],
+    },
+    {
+      status: "proposal",
+      summary: "Forbidden first-pass edit",
+      edits: [{ oldText: "", newText: "unsafe" }],
+    },
+    "broken JSON",
+  ]) {
+    let calls = 0,
+      reads = 0;
+    const events: TraceEvent[] = [];
+    const result = await requestBackend({
+      provider: "cerebras",
+      model: DEFAULT_MODELS.cerebras,
+      apiKey: "fake",
+      history: [{ role: "user", text: "What does handler do?" }],
+      responseStyle: "brief",
+      signal: new AbortController().signal,
+      tools: [
+        {
+          name: "read_file",
+          description: "read",
+          parameters: {},
+          execute: async () => {
+            reads++;
+            return { lines: "1: def handler(): pass" };
+          },
+        },
+      ],
+      onTrace: (e) => events.push(e),
+      fetchImpl: (async (_url, init) => {
+        calls++;
+        const body = JSON.parse(String(init?.body));
+        if (calls === 2)
+          assert.ok(
+            body.tools.some(
+              (t: { function: { name: string } }) =>
+                t.function.name === "read_file",
+            ),
+          );
+        return Response.json({
+          choices: [
+            {
+              message:
+                calls === 1
+                  ? {
+                      content:
+                        typeof initial === "string"
+                          ? initial
+                          : JSON.stringify(initial),
+                    }
+                  : calls === 2
+                    ? {
+                        tool_calls: [
+                          {
+                            id: "read",
+                            type: "function",
+                            function: { name: "read_file", arguments: "{}" },
+                          },
+                        ],
+                      }
+                    : { content: JSON.stringify(answer) },
+            },
+          ],
+        });
+      }) as typeof fetch,
+    });
+    assert.equal(result.edits.length, 0);
+    assert.equal(calls, 3);
+    assert.equal(reads, 1);
+    assert.ok(
+      events.some(
+        (e) =>
+          e.type === "backend.context_gap" ||
+          e.type === "backend.context_fallback",
+      ),
+    );
+  }
+});
+test("an empty first-pass summary gets one read-only repair without unnecessary research", async () => {
+  let calls = 0;
+  const events: TraceEvent[] = [];
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    history: [{ role: "user", text: "Can you explain this file?" }],
+    responseStyle: "brief",
+    signal: new AbortController().signal,
+    onTrace: (e) => events.push(e),
+    tools: [
+      {
+        name: "read_file",
+        description: "read",
+        parameters: {},
+        execute: async () => {
+          throw Error("Unneeded research");
+        },
+      },
+    ],
+    fetchImpl: (async (_url, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.tools, undefined);
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(
+                calls === 1
+                  ? { status: "answer", summary: "", edits: [] }
+                  : answer,
+              ),
+            },
+          },
+        ],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(result.summary, answer.summary);
+  assert.equal(calls, 2);
+  assert.ok(events.some((e) => e.type === "backend.context_repair"));
+});
+test("a canceled first-pass response is never delivered", async () => {
+  const controller = new AbortController();
+  await assert.rejects(
+    requestBackend({
+      provider: "cerebras",
+      model: DEFAULT_MODELS.cerebras,
+      apiKey: "fake",
+      history: [{ role: "user", text: "Explain this file." }],
+      responseStyle: "brief",
+      signal: controller.signal,
+      fetchImpl: (async () => {
+        controller.abort();
+        return Response.json({
+          choices: [{ message: { content: JSON.stringify(answer) } }],
+        });
+      }) as typeof fetch,
+    }),
+    /abort/i,
+  );
+});
+test("a read-only context answer honors explicitly configured reasoning effort", async () => {
+  for (const effort of ["low", "medium", "high"] as const) {
+    await requestBackend({
+      provider: "cerebras",
+      model: DEFAULT_MODELS.cerebras,
+      apiKey: "fake",
+      history: [{ role: "user", text: "Explain this file." }],
+      responseStyle: "brief",
+      effort,
+      signal: new AbortController().signal,
+      fetchImpl: (async (_url, init) => {
+        assert.equal(JSON.parse(String(init?.body)).reasoning_effort, effort);
+        return Response.json({
+          choices: [{ message: { content: JSON.stringify(answer) } }],
+        });
+      }) as typeof fetch,
+    });
+  }
+});
+test("direct JSON results still repair forbidden edits instead of bypassing assistance", async () => {
+  let calls = 0;
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    history: [{ role: "user", text: "Explain this code" }],
+    assistanceLevel: 0,
+    tools: [
+      {
+        name: "read_file",
+        description: "read",
+        parameters: {},
+        execute: async () => ({}),
+      },
+    ],
+    signal: new AbortController().signal,
+    fetchImpl: (async () => {
+      calls++;
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(
+                calls === 1
+                  ? {
+                      status: "proposal",
+                      summary: "Unsafe preview",
+                      edits: [{ oldText: "", newText: "print(1)" }],
+                    }
+                  : answer,
+              ),
+            },
+          },
+        ],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(calls, 2);
+  assert.equal(result.edits.length, 0);
+});
 test("plain prose after tools is finalized separately with a schema rather than parsed as JSON", async () => {
   const requests: Record<string, unknown>[] = [];
   const result = await requestBackend({

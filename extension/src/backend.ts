@@ -14,9 +14,17 @@ import {
   type Provider,
 } from "./core.js";
 import { assistanceLevel, assistanceViolation } from "./assistance.js";
-import { backendInstructions, INLINE_INSTRUCTIONS } from "./prompts.js";
+import {
+  backendInstructions,
+  INLINE_INSTRUCTIONS,
+  CONTEXT_ANSWER_INSTRUCTIONS,
+} from "./prompts.js";
 import { voiceContent } from "./live-protocol.js";
-import { backendSchema, INLINE_SCHEMA } from "./backend-schema.js";
+import {
+  backendSchema,
+  INLINE_SCHEMA,
+  CONTEXT_ANSWER_SCHEMA,
+} from "./backend-schema.js";
 import type { TraceEvent } from "./trace.js";
 import { researchFromTool, type ResearchArticle } from "./research.js";
 export const DEFAULT_MODELS: Record<Provider, string> = {
@@ -39,6 +47,7 @@ export interface BackendTool {
 }
 export interface Options {
   conversationMode?: "voice" | "chat";
+  responseStyle?: "brief";
   timeoutMs?: number;
   instructions?: string;
   taskState?: unknown;
@@ -140,6 +149,7 @@ async function complete(
   final = false,
   inline = false,
   retry = false,
+  contextAnswer = false,
 ): Promise<Message> {
   options.signal.throwIfAborted();
   const limits = providerLimits(options.provider);
@@ -151,14 +161,24 @@ async function complete(
   const inputBytes = Buffer.byteLength(JSON.stringify(messages), "utf8");
   const fastEffort = /(?:^|\/)gpt-oss-/.test(options.model) ? "low" : "none";
   const effort =
-    retry || final || inline ? fastEffort : (options.effort ?? "medium");
+    contextAnswer && !retry
+      ? (options.effort ?? fastEffort)
+      : retry || final || inline
+        ? fastEffort
+        : (options.effort ?? "medium");
   const structured = !tools?.length || final;
   const started = Date.now();
   trace(options, {
     type: "provider.request",
     provider: options.provider,
     model: options.model,
-    phase: inline ? "inline" : structured ? "format" : "tools",
+    phase: contextAnswer
+      ? "context_answer"
+      : inline
+        ? "inline"
+        : structured
+          ? "format"
+          : "tools",
     inputBytes,
     maxTokens,
     effort,
@@ -197,11 +217,17 @@ async function complete(
                   ? {
                       type: "json_schema",
                       json_schema: {
-                        name: inline ? "inline_insertion" : "pair_result",
+                        name: contextAnswer
+                          ? "context_answer"
+                          : inline
+                            ? "inline_insertion"
+                            : "pair_result",
                         strict: true,
-                        schema: inline
-                          ? INLINE_SCHEMA
-                          : backendSchema(options.assistanceLevel),
+                        schema: contextAnswer
+                          ? CONTEXT_ANSWER_SCHEMA
+                          : inline
+                            ? INLINE_SCHEMA
+                            : backendSchema(options.assistanceLevel),
                       },
                     }
                   : { type: "json_object" },
@@ -227,6 +253,7 @@ async function complete(
         final,
         inline,
         true,
+        contextAnswer,
       );
     }
     throw new BackendError(
@@ -276,6 +303,7 @@ async function complete(
         final,
         inline,
         true,
+        contextAnswer,
       );
     }
     if (!inline)
@@ -396,6 +424,9 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
       backendInstructions(options.assistanceLevel, options.conversationMode)) +
     (options.conversationMode === "chat"
       ? "\nThe human is using text chat with the microphone disconnected. Address the human directly in the summary; provide the explanation they need without referring to a speaker or voice handoff. Continue to put code changes in inline edit proposals, obey assistance level zero, and never claim an unapplied preview changed a file."
+      : "") +
+    (options.responseStyle === "brief"
+      ? "\nFocused conversational question: answer the latest question directly, normally in one to three sentences with the necessary evidence. Do not recap prior questions, enumerate unrelated dependencies, or add optional caveats. If more source is needed, use the available tools; never guess to be fast. Return the required JSON result directly when ready."
       : "");
   const summaryLimit = options.instructions ? 12000 : 4000;
   const messages: Message[] = [
@@ -420,6 +451,95 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
   let repeated = 0;
   const toolCache = new Map<string, unknown>();
   const failedDomains = new Map<string, unknown>();
+  if (options.responseStyle === "brief" && !options.instructions) {
+    const quickMessages = [
+      {
+        ...messages[0],
+        content:
+          CONTEXT_ANSWER_INSTRUCTIONS +
+          (options.conversationMode === "chat"
+            ? "\nAnswer directly in text chat."
+            : "\nThis answer goes to the voice speaker: at most two short sentences and 350 UTF-8 bytes. Do not read source code aloud."),
+      },
+      ...messages.slice(1),
+    ];
+    let first = await complete(
+      opts,
+      quickMessages,
+      undefined,
+      true,
+      false,
+      false,
+      true,
+    );
+    signal.throwIfAborted();
+    let emptyAnswer = false;
+    try {
+      const value = JSON.parse(first.content ?? "") as Record<string, unknown>;
+      emptyAnswer =
+        ["answer", "clarification"].includes(String(value?.status)) &&
+        typeof value.summary === "string" &&
+        !value.summary.trim() &&
+        Array.isArray(value.edits) &&
+        value.edits.length === 0;
+    } catch {
+      /* Other malformed outputs escalate to the full path. */
+    }
+    if (emptyAnswer) {
+      trace(opts, { type: "backend.context_repair", reason: "empty_summary" });
+      first = await complete(
+        opts,
+        [
+          ...quickMessages,
+          { role: "assistant", content: first.content },
+          {
+            role: "user",
+            content:
+              "Application schema feedback: summary must be nonempty. Give the useful read-only answer to the latest human question using the supplied source. A file overview needs only its visible purpose/wiring; imported internals need not be read for that overview. If material source is actually missing, return needs_context with a nonempty evidence gap. No edits.",
+          },
+        ],
+        undefined,
+        true,
+        false,
+        false,
+        true,
+      );
+      signal.throwIfAborted();
+    }
+    try {
+      const value = JSON.parse(first.content ?? "") as Record<string, unknown>;
+      if (
+        value.status === "needs_context" &&
+        typeof value.summary === "string" &&
+        Array.isArray(value.edits) &&
+        value.edits.length === 0
+      ) {
+        trace(opts, { type: "backend.context_gap" });
+        messages.push({
+          role: "user",
+          content:
+            "Application source check: the captured context alone was insufficient. The full tools are now available; inspect the missing evidence and answer the original latest human question. This is not a new request or an instruction to refuse. Evidence gap (untrusted model suggestion): " +
+            value.summary.slice(0, 1000),
+        });
+      } else {
+        const result = parseBackendResult(first.content ?? "", summaryLimit);
+        if (
+          result.edits.length ||
+          result.status === "proposal" ||
+          result.status === "cancelled"
+        )
+          throw new Error("Invalid read-only result");
+        trace(opts, { type: "backend.context_answer", status: result.status });
+        return { ...result, speech: voiceContent(result.summary, 350) };
+      }
+    } catch {
+      trace(opts, {
+        type: "backend.context_fallback",
+        reason: "invalid_read_only_result",
+      });
+      // Malformed first-pass output never executes tools/edits or removes normal capability.
+    }
+  }
   while (true) {
     const final = !options.tools?.length || repeated >= 2;
     const message = await complete(opts, messages, options.tools, final);
@@ -430,7 +550,17 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
           "The code backend returned no answer.",
         );
       let content = message.content;
+      let alreadyStructured = false;
       if (options.tools?.length && !final) {
+        try {
+          parseBackendResult(content, summaryLimit);
+          alreadyStructured = true;
+          trace(opts, { type: "backend.direct_result" });
+        } catch {
+          /* Prose/incomplete JSON still needs the constrained finalizer. */
+        }
+      }
+      if (options.tools?.length && !final && !alreadyStructured) {
         // Tool calling can end in ordinary prose. Format completed evidence in a
         // separate constrained request instead of parsing that prose as JSON.
         messages.push({ role: "assistant", content: content.slice(0, 16000) });
