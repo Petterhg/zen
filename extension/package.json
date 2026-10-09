@@ -353,6 +353,7 @@
       "terminal.integrated.fontFamily": "'SFMono-Regular', Consolas, 'Liberation Mono', 'Courier New', monospace",
       "terminal.integrated.fontSize": 12,
       "terminal.integrated.lineHeight": 1.9,
+      "terminal.integrated.persistentSessionReviveProcess": "never",
       "terminal.integrated.cursorStyle": "line",
       "terminal.integrated.cursorBlinking": false,
       "terminal.integrated.tabs.enabled": true,
