@@ -89,6 +89,10 @@ writeFileSync(
     `script-src 'sha256-${scriptHash}'`,
   ),
 );
+cpSync(
+  path.join(root, "assets/brand/zen.icns"),
+  path.join(source, "resources/darwin/code.icns"),
+);
 patchSourceLayout(source);
 applyNativeShell(path.join(source, "src/vs/workbench/browser/media/style.css"));
 const productPath = path.join(source, "product.json");

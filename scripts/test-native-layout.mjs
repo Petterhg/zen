@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { nativeShellCss } from "./native-shell.mjs";
+import { readFile, mkdir } from "node:fs/promises";
 import { transform } from "esbuild";
 import { chromium } from "playwright";
 const browser = await chromium.launch({ headless: true });
@@ -101,6 +102,32 @@ try {
     width: "844px",
     remaining: 0,
   });
+  await mkdir("artifacts/branding", { recursive: true });
+  const icon = (await readFile("assets/brand/app-icon.png")).toString("base64");
+  await page.setViewportSize({ width: 640, height: 300 });
+  await page.setContent(
+    `<style>${nativeShellCss()} body{margin:0} .titlebar{position:relative;height:54px;border-bottom:1px solid #8883} .preview{height:246px;display:flex;align-items:center;justify-content:center;gap:24px}.preview img{object-fit:contain}</style><div class="monaco-workbench"><div class="part titlebar"><div class="titlebar-left"></div></div></div><div class="preview"><img width="160" height="160" src="data:image/png;base64,${icon}"><img width="64" height="64" src="data:image/png;base64,${icon}"><img width="32" height="32" src="data:image/png;base64,${icon}"></div>`,
+  );
+  for (const theme of ["light", "dark"]) {
+    const palette = JSON.parse(
+      await readFile(`extension/media/zen-${theme}.json`, "utf8"),
+    );
+    await page.evaluate((colors) => {
+      for (const [key, value] of Object.entries(colors))
+        document.documentElement.style.setProperty(
+          "--vscode-" + key.replaceAll(".", "-"),
+          value,
+        );
+      document.body.style.background = colors["editor.background"];
+    }, palette.colors);
+    assert.match(
+      await page
+        .locator(".titlebar-left")
+        .evaluate((el) => getComputedStyle(el, "::before").maskImage),
+      /^url\("data:image\/png;base64,/,
+    );
+    await page.screenshot({ path: `artifacts/branding/${theme}.png` });
+  }
   console.log(
     "Native helper fixture passed: one title toggle, fold state, full editor/terminal height, no duplicate heading, disposal.",
   );

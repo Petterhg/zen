@@ -329,3 +329,11 @@ Validation: the full offline suite passed with 139 tests, type/lint/build, actua
 Settings removes duplicate branding and uses compact text navigation. The workboard Workers selector opens a positioned popover with agent descriptions; opening it does not move the run list, and Escape or an outside click closes it. Tool settings distinguish Enabled (global gate) from Use in conversation (foreground pairing assignment). Shared built-ins and custom commands have visible descriptions, including in worker assignment controls. Internal pairing context, memory, pointing and coordination tools are hidden from shared settings and blocked at the host execution boundary for workers. Existing hidden policy values are preserved on visible tool saves.
 
 Validation covers core-tool exclusion for hand-authored worker definitions, unchanged foreground access, preservation of hidden policy, visible descriptions, popover layout/dismissal and responsive light/dark settings assets. Provider behavior and human voice feel are not re-evaluated by these offline checks.
+
+## Ensō branding
+
+The native header uses an original generated brush-circle mark, tinted through the active theme’s foreground color. macOS uses the matching brush mark on a warm ivory app tile. The launcher/bootstrap installs the checked-in multi-resolution Zen.icns before existing signature verification/signing; bundle identifier and Keychain identity configuration are unchanged. Source overlays install the same icon at resources/darwin/code.icns. This change does not restart an active editor or reset macOS caches. Fully quit and launch with npm start to install updated resources; macOS may retain a cached Dock icon until relaunch.
+
+The generated masters, small header asset and ICNS are checked in. Regenerate platform sizes on macOS with `node scripts/build-branding.mjs`; ordinary startup does not require image generation. No stock pixels from the reference screenshot are bundled.
+
+Validation: 140 tests and the full type/lint/build/browser/prototype suite passed. Light/dark fixtures render the header plus 160px, 64px and 32px app icons. A disposable clone of the pinned macOS app accepted the overlay, declared Zen.icns and passed deep/strict codesign verification. The active editor and Dock were not restarted.

@@ -1,3 +1,4 @@
+import { applyRuntimeIcon } from "./branding.mjs";
 import { patchRuntimeLayout } from "./native-layout.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -5,6 +6,14 @@ import path from "node:path";
 
 const start = "/* zen-native-shell:start */";
 const end = "/* zen-native-shell:end */";
+export function nativeShellCss() {
+  const mark = readFileSync(
+    new URL("../extension/media/zen-mark.png", import.meta.url),
+  ).toString("base64");
+  return readFileSync(new URL("./native-shell.css", import.meta.url), "utf8")
+    .trim()
+    .replaceAll("{{zenMark}}", `data:image/png;base64,${mark}`);
+}
 export function applyNativeShell(cssFile) {
   const original = readFileSync(cssFile, "utf8");
   const begin = original.indexOf(start);
@@ -14,15 +23,13 @@ export function applyNativeShell(cssFile) {
   const base =
     begin < 0 ? original.trimEnd() : original.slice(0, begin).trimEnd();
   const suffix = finish < 0 ? "" : original.slice(finish + end.length).trim();
-  const css = readFileSync(
-    new URL("./native-shell.css", import.meta.url),
-    "utf8",
-  ).trim();
+  const css = nativeShellCss();
   const next = `${base}\n${start}\n${css}\n${end}\n${suffix ? suffix + "\n" : ""}`;
   if (next !== original) writeFileSync(cssFile, next);
 }
 
 export function applyRuntimeShell(resources) {
+  applyRuntimeIcon(resources);
   patchRuntimeLayout(resources);
   applyNativeShell(
     path.join(resources, "out/vs/workbench/workbench.desktop.main.css"),
