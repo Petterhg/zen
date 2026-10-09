@@ -32,3 +32,16 @@ Ignored, owner-only `artifacts/together/*.json` reports contain complete-request
 ## Intended next step
 
 If live results are useful, add an explicitly configurable research provider/model for the existing isolated explorer and service-card synthesis, leaving fast foreground pairing on its current backend. Feed compact verified findings back to that backend/speaker; do not let large raw research conversations fill the pairing context. Evaluate the same synthetic cases with existing backends before choosing a default. Dedicated review agents remain deferred; the review fixture evaluates reasoning capability only. Together selection, automatic escalation, full native-tool integration and human voice validation are not implemented by this harness.
+
+## October 9, 2026: first live check
+
+Both exact requested models completed all four cases with the authorized account. The structured summaries/reviews had valid fixture citations, and both performed the requested synthetic read plus matching tool-result continuation. Both identified the cancellation branch's `continue` bug. Provider-default reasoning was present in separate fields and was excluded from reports.
+
+| Case                    | DeepSeek V4.1 Flash | GLM-5.3 Flash |
+| ----------------------- | ------------------: | ------------: |
+| File explanation        |               2.1 s |         2.0 s |
+| Service summary         |               7.1 s |         8.8 s |
+| Cancellation review     |               5.3 s |        20.5 s |
+| Two-call tool roundtrip |               2.6 s |         5.2 s |
+
+These are single complete-answer samples on very small synthetic inputs, not throughput/large-context benchmarks or a model ranking. GLM's summary described the flow as strictly synchronous and the gateway as external without sufficient evidence, while also listing those internals as unknown. Its citations passed structural validation; interpretation still needed review. DeepSeek was faster on the deeper cases in this run, making it a reasonable first candidate for a configurable isolated research path, not evidence that it is universally better. Neither is integrated into Zen's editor backend yet. Required local validation passed 122 tests plus type/lint/build and simulated panel/native-layout/prototype checks; no human microphone or private-repository Together run was performed. Generated results and keys remain ignored locally.
