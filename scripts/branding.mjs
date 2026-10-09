@@ -16,6 +16,21 @@ export function applyRuntimeIcon(resources) {
   const destination = path.join(contents, "Resources/Zen.icns");
   if (!existsSync(destination) || !readFileSync(destination).equals(icon))
     writeFileSync(destination, icon);
-  const next = plist.replace(iconKey, "$1Zen.icns$2");
+  // Asset-catalog names take precedence over CFBundleIconFile on macOS.
+  let next = plist
+    .replace(iconKey, "$1Zen.icns$2")
+    .replace(/\s*<key>CFBundleIconName<\/key>\s*<string>[^<]*<\/string>/g, "");
+  for (const key of ["CFBundleDisplayName", "CFBundleName"]) {
+    const field = new RegExp(`(<key>${key}</key>\\s*<string>)[^<]*(</string>)`);
+    if (field.test(next)) next = next.replace(field, "$1Zen$2");
+    else
+      next = next.replace(
+        "<dict>",
+        `<dict>\n<key>${key}</key><string>Zen</string>`,
+      );
+  }
+  // Keep Electron package.name and the bundle identifier unchanged: existing
+  // SecretStorage uses that application identity, independently of display branding.
+
   if (next !== plist) writeFileSync(plistFile, next);
 }

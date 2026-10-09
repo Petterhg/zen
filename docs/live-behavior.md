@@ -337,3 +337,5 @@ The native header uses an original generated brush-circle mark, tinted through t
 The generated masters, small header asset and ICNS are checked in. Regenerate platform sizes on macOS with `node scripts/build-branding.mjs`; ordinary startup does not require image generation. No stock pixels from the reference screenshot are bundled.
 
 Validation: 140 tests and the full type/lint/build/browser/prototype suite passed. Light/dark fixtures render the header plus 160px, 64px and 32px app icons. A disposable clone of the pinned macOS app accepted the overlay, declared Zen.icns and passed deep/strict codesign verification. The active editor and Dock were not restarted.
+
+The macOS overlay also removes the upstream CFBundleIconName asset-catalog override, which otherwise wins over Zen.icns, and sets both bundle display-name fields to Zen. Electron package.name and the bundle identifier remain unchanged to preserve the existing application/SecretStorage namespace.
