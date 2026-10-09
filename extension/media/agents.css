@@ -1,0 +1,137 @@
+:root {
+  color-scheme: light dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  color: var(--vscode-foreground, #384438);
+  background: var(--vscode-editor-background, #f5f4ee);
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-size: 13px;
+  line-height: 1.6;
+}
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 48px 36px 64px;
+}
+h1 {
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -0.7px;
+  margin: 8px 0;
+}
+h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+p {
+  margin: 0;
+  color: var(--vscode-descriptionForeground, #667462);
+}
+.eyebrow {
+  color: var(--vscode-descriptionForeground, #667462);
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.connection,
+.profile {
+  border-top: 1px solid var(--vscode-panel-border, #d7ddcf);
+  margin-top: 28px;
+  padding-top: 24px;
+}
+.connection,
+.profile-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  justify-content: space-between;
+}
+label {
+  display: block;
+  color: var(--vscode-descriptionForeground, #667462);
+  font-size: 12px;
+}
+.enabled {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+input[type="checkbox"] {
+  accent-color: var(--vscode-button-background, #dfe7d6);
+}
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 16px;
+  margin: 20px 0 16px;
+}
+select,
+textarea {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 10px 12px;
+  color: var(--vscode-input-foreground, #384438);
+  background: var(--vscode-input-background, #edeee6);
+  border: 1px solid var(--vscode-input-border, #d7ddcf);
+  border-radius: 5px;
+  font: inherit;
+}
+textarea {
+  min-height: 100px;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.7;
+}
+button {
+  border: 1px solid var(--vscode-button-border, #8c9c7e);
+  border-radius: 5px;
+  padding: 9px 16px;
+  font: inherit;
+  color: var(--vscode-button-foreground, #384438);
+  background: var(--vscode-button-background, #dfe7d6);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #61784e);
+  outline-offset: 3px;
+}
+.note {
+  font-size: 12px;
+  margin-top: 18px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 24px;
+}
+.error {
+  color: var(--vscode-errorForeground, #ab4636);
+}
+@media (max-width: 560px) {
+  main {
+    padding: 28px 20px;
+  }
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .profile-heading,
+  .connection {
+    flex-wrap: wrap;
+  }
+  .actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

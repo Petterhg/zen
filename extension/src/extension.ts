@@ -26,6 +26,12 @@ import {
 } from "./task-policy.js";
 import { explorationTool } from "./exploration.js";
 import {
+  researchAgents,
+  researchChoice,
+  type ResearchAgents,
+} from "./subagents.js";
+import { AgentSettings } from "./agent-settings.js";
+import {
   bufferReferences,
   codeReference,
   SpokenCodeFocus,
@@ -87,7 +93,6 @@ interface PanelMessage {
   event?: LiveEvent;
   sessionToken?: number;
   text?: string;
-  provider?: Provider;
   mode?: string;
   contextId?: number;
   endMs?: number;
@@ -115,6 +120,15 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private lastEditEvent?: { status: string; file?: string };
   private recentFiles: string[] = [];
   private research: ResearchArticle[] = [];
+  private agentSettings?: AgentSettings;
+  openAgentSettings(): void {
+    this.agentSettings ??= new AgentSettings(
+      this.context,
+      () => this.configureKeys(),
+      () => this.key("together"),
+    );
+    this.agentSettings.open();
+  }
   private researchBriefs: ResearchBriefs;
   private contextWarmups = new ContextWarmups();
   private contextEngaged = false;
@@ -133,14 +147,15 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     clearTimeout(this.contextDwell);
     this.post({ type: "contextStatus", state: "idle" });
   }
+  private agents(): ResearchAgents {
+    // Application settings only; a repository cannot supply agent instructions.
+    return researchAgents(
+      this.configuration().inspect("subagents")?.globalValue,
+    );
+  }
   private orientationKey(scope: string): string {
-    const provider = this.configuration().get<Provider>("backend", "groq");
-    return JSON.stringify([
-      this.researchWorkspaceSignature(),
-      scope,
-      provider,
-      this.configuration().get(`${provider}Model`, DEFAULT_MODELS[provider]),
-    ]);
+    const agent = this.agents().explorer;
+    return JSON.stringify([this.researchWorkspaceSignature(), scope, agent]);
   }
   private async warmOrientation(
     context: EditorContext,
@@ -152,11 +167,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       key = this.orientationKey(scope);
     const token = this.sessionToken,
       workspace = this.researchWorkspaceSignature();
-    const provider = this.configuration().get<Provider>("backend", "groq");
-    const model = this.configuration().get(
-      `${provider}Model`,
-      DEFAULT_MODELS[provider],
-    );
+    const agent = this.agents().explorer;
+    if (!agent.enabled) return key;
+    const provider = "together" as const;
+    const model = agent.model;
     const startedAt = Date.now(),
       warmRevision = this.contextWarmups.revision;
     const { started } = this.contextWarmups.start(
@@ -204,11 +218,14 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           model,
           apiKey,
           signal,
-          timeoutMs: 30000,
+          timeoutMs: 120000,
           assistanceLevel: 0,
-          effort: "none",
+          effort: agent.reasoningEffort,
           tools: [],
-          instructions: ORIENTATION_INSTRUCTIONS,
+          instructions:
+            agent.instructions +
+            "\nApplication evidence/output contract:\n" +
+            ORIENTATION_INSTRUCTIONS,
           history: [{ role: "user", text: question }],
           taskState: {
             scope,
@@ -628,20 +645,14 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
                 captured.cursor?.offset !== document.offsetAt(position)
               )
                 return [];
-              const provider = this.configuration().get<Provider>(
-                "backend",
-                "groq",
-              );
+              const provider = "cerebras" as const;
               const key = await this.key(provider);
               if (!key) return [];
               const insertion = await requestInline({
                 onTrace: (event) =>
                   this.trace.record({ ...event, type: "inline." + event.type }),
                 provider,
-                model: this.configuration().get(
-                  `${provider}Model`,
-                  DEFAULT_MODELS[provider],
-                ),
+                model: DEFAULT_MODELS.cerebras,
                 apiKey: key,
                 assistanceLevel: this.assistance(),
                 context: captured,
@@ -749,6 +760,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       vscode.languages.onDidChangeDiagnostics(() => this.scheduleContext()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("pairCode")) {
+          if (event.affectsConfiguration("pairCode.subagents"))
+            this.resetWorkingContext();
           if (
             event.affectsConfiguration("pairCode.memoryEnabled") ||
             event.affectsConfiguration("pairCode.memoryHindsightEnabled") ||
@@ -883,7 +896,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   ): Promise<string | undefined> {
     const environment = {
       openai: "OPENAI_API_KEY",
-      groq: "GROQ_API_KEY",
+      together: "TOGETHER_API_KEY",
       cerebras: "CEREBRAS_API_KEY",
       firecrawl: "FIRECRAWL_API_KEY",
     };
@@ -932,11 +945,11 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     );
     this.post({ type: "indexStatus", ...this.codeIndex.status });
     const config = this.configuration();
-    const provider = config.get<Provider>("backend", "groq");
+    const provider = "cerebras" as const;
     this.post({
       type: "configuration",
       provider,
-      model: config.get(`${provider}Model`),
+      model: DEFAULT_MODELS.cerebras,
       voiceModel: "gpt-live-1",
       openaiReady: Boolean(await this.key("openai")),
       backendReady: Boolean(await this.key(provider)),
@@ -1328,16 +1341,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         await this.configureKeys();
         return;
       }
-      if (
-        message.type === "provider" &&
-        ["groq", "cerebras"].includes(message.provider ?? "")
-      ) {
-        this.cancel();
-        await this.configuration().update(
-          "backend",
-          message.provider,
-          vscode.ConfigurationTarget.Global,
-        );
+      if (message.type === "agentSettings") {
+        this.openAgentSettings();
         return;
       }
       if (message.type === "accept") {
@@ -1515,9 +1520,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.inlineJob?.abort();
     this.backendRunning = true;
     this.activeDelegation = delegationId;
-    const provider = this.configuration().get<Provider>("backend", "groq");
+    const provider = "cerebras" as const;
     this.post({ type: "backendStatus", state: "working", provider });
     try {
+      const agents = this.agents();
       const key = await this.key(provider);
       if (!key) throw new Error(`Configure your ${provider} API key first.`);
       // Give fragments already in transit a brief opportunity to arrive; this is not turn detection.
@@ -1802,6 +1808,13 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       const memoryReference = memoryResult.value,
         effort = effortResult.value;
       const explorer = explorationTool({
+        agents,
+        researchKey: () => this.key("together"),
+        allowWeb:
+          !webResearchForbidden(latestHuman) &&
+          /\b(?:web search|search the web|online|internet|external|official|documentation|docs)\b|https:\/\//i.test(
+            latestHuman,
+          ),
         researchReference,
         onReport: (report, question, scope) => {
           if (
@@ -1823,10 +1836,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         timeoutMs:
           this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
         provider,
-        model: this.configuration().get(
-          `${provider}Model`,
-          DEFAULT_MODELS[provider],
-        ),
+        model: DEFAULT_MODELS.cerebras,
         apiKey: key,
         context,
         tools: readTools,
@@ -1857,6 +1867,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         const report = (await explorer.execute(
           {
             question: latestHuman,
+            agent: researchChoice(agents, effort),
             ...(explorationScope(latestHuman, context?.file)
               ? { scope: explorationScope(latestHuman, context?.file) }
               : {}),
@@ -1899,10 +1910,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         conversationMode: this.conversationMode,
         responseStyle: quick ? "brief" : undefined,
         provider,
-        model: this.configuration().get(
-          `${provider}Model`,
-          DEFAULT_MODELS[provider],
-        ),
+        model: DEFAULT_MODELS.cerebras,
         apiKey: key,
         history,
         context,
@@ -1925,7 +1933,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         tools: [
           ...readTools,
           ...this.memory.tools(latestHuman, memoryScope),
-          explorer,
+          ...(Object.values(agents).some((a) => a.enabled) ? [explorer] : []),
           ...(context &&
           (this.conversationMode === "voice" ||
             /\b(?:highlight|point|focus|show me)\b/i.test(latestHuman))
@@ -2518,7 +2526,11 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           value: "openai" as const,
           description: "GPT-Live voice",
         },
-        { label: "Groq", value: "groq" as const, description: "Code backend" },
+        {
+          label: "Together AI",
+          value: "together" as const,
+          description: "Exploration and deep research",
+        },
         {
           label: "Firecrawl",
           value: "firecrawl" as const,
@@ -2527,7 +2539,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         {
           label: "Cerebras",
           value: "cerebras" as const,
-          description: "Code backend",
+          description: "Fast pairing backend",
         },
       ],
       {
@@ -2569,6 +2581,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.cancel();
     this.inlineJob?.abort();
     this.sessionJob?.abort();
+    this.agentSettings?.dispose();
     this.disposables.forEach((disposable) => disposable.dispose());
   }
 }
@@ -2647,6 +2660,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     ),
     vscode.commands.registerCommand("pairCode.open", () =>
       vscode.commands.executeCommand("pairCode.companion.focus"),
+    ),
+    vscode.commands.registerCommand("pairCode.agentSettings", () =>
+      companion.openAgentSettings(),
     ),
     vscode.commands.registerCommand("pairCode.configure", () =>
       companion.configureKeys(),

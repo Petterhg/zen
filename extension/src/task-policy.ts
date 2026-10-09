@@ -3,9 +3,9 @@ import type { TraceEvent } from "./trace.js";
 
 export type Effort = "none" | "low" | "medium" | "high";
 export const providerLimits = (provider: Provider) =>
-  provider === "cerebras"
-    ? { contextTokens: 131072, outputTokens: 32768 }
-    : { contextTokens: 131072, outputTokens: 16384 };
+  provider === "together"
+    ? { contextTokens: 1000000, outputTokens: 32768 }
+    : { contextTokens: 131072, outputTokens: 32768 };
 
 /** Only unambiguous, short questions skip the remote effort classifier.
  * This changes reasoning/pacing, never tool access or evidence requirements.

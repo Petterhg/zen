@@ -178,7 +178,7 @@ test("provider adapter handles Groq and Cerebras without external tool execution
       }),
     );
   }) as typeof fetch;
-  for (const provider of ["groq", "cerebras"] as const)
+  for (const provider of ["together", "cerebras"] as const)
     await requestBackend({
       provider,
       model: "test-model",
@@ -191,7 +191,7 @@ test("provider adapter handles Groq and Cerebras without external tool execution
   assert.deepEqual(
     calls.map((call) => [call.url, call.body.tools]),
     [
-      ["https://api.groq.com/openai/v1/chat/completions", undefined],
+      ["https://api.together.ai/v1/chat/completions", undefined],
       ["https://api.cerebras.ai/v1/chat/completions", undefined],
     ],
   );
@@ -199,7 +199,7 @@ test("provider adapter handles Groq and Cerebras without external tool execution
 test("provider failures do not echo their body or credentials into the panel", async () => {
   await assert.rejects(
     requestBackend({
-      provider: "groq",
+      provider: "together",
       model: "test",
       apiKey: "test-secret",
       history: [],
@@ -220,7 +220,7 @@ test("cancellation propagates to the provider request", async () => {
   controller.abort();
   await assert.rejects(
     requestBackend({
-      provider: "groq",
+      provider: "together",
       model: "test",
       apiKey: "fake",
       history: [],

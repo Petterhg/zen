@@ -7,12 +7,13 @@ import {
 import { configurationRequiresCancellation } from "../extension/src/settings-policy.js";
 import { explorationTool } from "../extension/src/exploration.js";
 const signal = () => new AbortController().signal;
-test("slider and visual changes preserve backend work, while privacy/provider changes cancel it", () => {
+test("slider and visual changes preserve backend work, while privacy/foreground effort changes cancel it", () => {
   for (const name of [
     "assistanceLevel",
     "followPair",
     "traceEnabled",
     "inlineSuggestions",
+    "subagents",
   ])
     assert.equal(
       configurationRequiresCancellation(
@@ -20,12 +21,7 @@ test("slider and visual changes preserve backend work, while privacy/provider ch
       ),
       false,
     );
-  for (const name of [
-    "shareEditorContext",
-    "backend",
-    "cerebrasModel",
-    "reasoningEffort",
-  ])
+  for (const name of ["shareEditorContext", "reasoningEffort"])
     assert.equal(
       configurationRequiresCancellation(
         (field) => field === `pairCode.${name}`,

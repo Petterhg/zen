@@ -1,6 +1,6 @@
 # Together AI model evaluation
 
-The first step is evaluation, not replacing the latency-sensitive pairing backend. The requested models are `deepseek-ai/DeepSeek-V4.1-Flash` and `zai-org/GLM-5.3-Flash`. Together's [serverless catalog](https://docs.together.ai/docs/serverless/models) lists both with function calling and structured outputs; successful account access and model behavior still need live verification. API availability and documented limits can change.
+This document records the initial synthetic evaluation and subsequent isolated research integration. Fast foreground pairing remains on Cerebras. The original benchmark models are `deepseek-ai/DeepSeek-V4.1-Flash` and `zai-org/GLM-5.3-Flash`. Together's [serverless catalog](https://docs.together.ai/docs/serverless/models) lists both with function calling and structured outputs; successful account access was verified in the synthetic checks below. API availability and documented limits can change.
 
 ## Keys and running
 
@@ -12,7 +12,7 @@ npm run eval:together
 npm run eval:together -- /absolute/path/to/zen/.env
 ```
 
-Existing OpenAI/Groq/Cerebras/Firecrawl keys may be in a previous prototype's `.env`; clone/move operations do not migrate ignored files. In the editor, encrypted SecretStorage overrides launch environment variables, which override the application's development `.env`. Keys entered in Add API Keys belong to the runtime profile and are not exported into `.env`. The developer evaluation command cannot extract them.
+Existing OpenAI/Cerebras/Firecrawl keys may be in a previous prototype's `.env`; clone/move operations do not migrate ignored files. In the editor, encrypted SecretStorage overrides launch environment variables, which override the application's development `.env`. Keys entered in Add API Keys belong to the runtime profile and are not exported into `.env`. The developer evaluation command cannot extract them.
 
 ## What is measured
 
@@ -29,7 +29,7 @@ Each model makes at most five calls in one run. The explicit evaluation cap is 4
 
 Ignored, owner-only `artifacts/together/*.json` reports contain complete-request duration, finish reason, token usage, final answer and checks. No prompts from private repositories, credentials, provider error bodies or reasoning text are stored. Thinking fields may be preserved in a tool wire roundtrip when a model returns them, but never appear in the report. Timings are neither first-token nor audible-voice latency, and one run cannot establish average performance, production reliability or a quality ranking.
 
-## Intended next step
+## Initial routing proposal (superseded by the integration below)
 
 If live results are useful, add an explicitly configurable research provider/model for the existing isolated explorer and service-card synthesis, leaving fast foreground pairing on its current backend. Feed compact verified findings back to that backend/speaker; do not let large raw research conversations fill the pairing context. Evaluate the same synthetic cases with existing backends before choosing a default. Dedicated review agents remain deferred; the review fixture evaluates reasoning capability only. Together selection, automatic escalation, full native-tool integration and human voice validation are not implemented by this harness.
 
@@ -44,4 +44,12 @@ Both exact requested models completed all four cases with the authorized account
 | Cancellation review     |               5.3 s |        20.5 s |
 | Two-call tool roundtrip |               2.6 s |         5.2 s |
 
-These are single complete-answer samples on very small synthetic inputs, not throughput/large-context benchmarks or a model ranking. GLM's summary described the flow as strictly synchronous and the gateway as external without sufficient evidence, while also listing those internals as unknown. Its citations passed structural validation; interpretation still needed review. DeepSeek was faster on the deeper cases in this run, making it a reasonable first candidate for a configurable isolated research path, not evidence that it is universally better. Neither is integrated into Zen's editor backend yet. Required local validation passed 122 tests plus type/lint/build and simulated panel/native-layout/prototype checks; no human microphone or private-repository Together run was performed. Generated results and keys remain ignored locally.
+These are single complete-answer samples on very small synthetic inputs, not throughput/large-context benchmarks or a model ranking. GLM's summary described the flow as strictly synchronous and the gateway as external without sufficient evidence, while also listing those internals as unknown. Its citations passed structural validation; interpretation still needed review. DeepSeek was faster on the deeper cases in this run, making it a reasonable first candidate for a configurable isolated research path, not evidence that it is universally better. At this initial checkpoint neither was integrated into Zen; the implementation below now routes isolated research through Together. Required local validation passed 122 tests plus type/lint/build and simulated panel/native-layout/prototype checks; no human microphone or private-repository Together run was performed. Generated results and keys remain ignored locally.
+
+## Current editor integration
+
+Together now runs the isolated Explorer and Deep research profiles. Explorer defaults to DeepSeek V4.1 Flash; Deep research defaults to `deepseek-ai/DeepSeek-V4-Pro-0813`. GLM-5.3 Flash remains an alternative in **Zen: Agent Settings**. Profiles have enabled state, instructions and soft reasoning depth controls; Off is an actual thinking toggle. Foreground conversation, inline proposals and memory remain on Cerebras. See the [current behavior and delegation contract](live-behavior.md#configurable-together-research-profiles).
+
+Together’s [serverless catalog](https://docs.together.ai/docs/serverless/models) lists all three models with function calling and structured outputs. The application uses a conservative one-million-token research context estimate, reserving output room, and retains scoped discovery rather than loading the repository. These are provider capacity estimates, not a claim that a model understands all supplied code.
+
+Actual application checks used local keys and synthetic source only. Flash, Pro and GLM each accepted Off reasoning with a valid structured answer. Cerebras selected the named research profile, the Together child inspected the synthetic files through the application tool loop, and compact evidence returned to Cerebras. Flash finished in about 8 seconds; Pro samples took about 15–30 seconds. These include complete delegation and answers, not voice latency, and are too few to rank reliability. Some Pro/parent interpretations still inferred durable side effects from opaque calls and repeated discovery; source citations alone did not catch that. Prompt guidance was tightened, but semantic correctness and large-context performance remain evaluation work. The standalone `eval:together` command still benchmarks the original two models independently; Pro was checked through the real application backend/delegation path.

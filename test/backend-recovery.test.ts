@@ -420,8 +420,8 @@ test("truncated tool calls are not executed; bounded recovery accounts for reaso
 test("persistent output exhaustion returns a truthful no-preview result after internal recovery", async () => {
   let calls = 0;
   const result = await requestBackend({
-    provider: "groq",
-    model: DEFAULT_MODELS.groq,
+    provider: "together",
+    model: DEFAULT_MODELS.together,
     apiKey: "fake",
     history: [],
     signal: new AbortController().signal,

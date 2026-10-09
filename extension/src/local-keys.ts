@@ -9,7 +9,6 @@ export async function localKey(
   if (
     ![
       "OPENAI_API_KEY",
-      "GROQ_API_KEY",
       "CEREBRAS_API_KEY",
       "FIRECRAWL_API_KEY",
       "TOGETHER_API_KEY",

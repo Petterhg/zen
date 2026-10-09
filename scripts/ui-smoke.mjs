@@ -50,16 +50,14 @@ try {
     return result.result.value;
   };
   const state = await evaluate(
-    `({file:doc.getElementById('contextFile').textContent,disabled:doc.getElementById('connect').disabled,microphone:doc.featurePolicy.allowsFeature('microphone'),camera:doc.featurePolicy.allowsFeature('camera'),provider:doc.getElementById('provider').value,model:doc.getElementById('provider').title,inlineMode:doc.getElementById('inlineMode').value})`,
+    `({file:doc.getElementById('contextFile').textContent,disabled:doc.getElementById('connect').disabled,microphone:doc.featurePolicy.allowsFeature('microphone'),camera:doc.featurePolicy.allowsFeature('camera'),providerSelector:!!doc.getElementById('provider'),agentSettings:!!doc.getElementById('agentSettings'),inlineMode:doc.getElementById('inlineMode').value})`,
   );
   assert.equal(state.file, "pairing.ts");
   assert.equal(state.microphone, true);
   assert.equal(state.camera, false);
   assert.ok(["off", "manual", "automatic"].includes(state.inlineMode));
-  assert.equal(
-    state.model,
-    state.provider === "cerebras" ? "qwen-3.8-27b" : "qwen/qwen3.8-27b",
-  );
+  assert.equal(state.providerSelector, false);
+  assert.equal(state.agentSettings, true);
   await evaluate(`doc.getElementById('configure').click()`);
   const page = browser.contexts()[0].pages()[0];
   await page
@@ -78,7 +76,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   if (state.disabled)
-    assert.match(result.error, /Configure your (groq|cerebras) API key first/);
+    assert.match(result.error, /Configure your cerebras API key first/);
   else {
     assert.equal(result.error, "");
     assert.ok(

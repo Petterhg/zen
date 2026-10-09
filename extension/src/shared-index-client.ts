@@ -92,7 +92,8 @@ export class SharedIndexClient {
                     ([name]) =>
                       ![
                         "OPENAI_API_KEY",
-                        "GROQ_API_KEY",
+                        "GROQ_API_KEY", // Exclude legacy credentials too.
+                        "TOGETHER_API_KEY",
                         "CEREBRAS_API_KEY",
                         "FIRECRAWL_API_KEY",
                       ].includes(name),

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- prettier-ignore -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}}; script-src 'nonce-{{nonce}}'; connect-src 'none';" />
+    <link rel="stylesheet" href="{{css}}" />
+    <title>Zen · Agent settings</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="eyebrow">YOUR PAIR</span>
+        <h1>Agent settings</h1>
+        <p>Fast conversation. Deeper work when you need it.</p>
+      </header>
+      <section class="connection">
+        <div>
+          <h2>Pairing</h2>
+          <p>
+            GPT-Live for voice · Cerebras Qwen for code. No model switching
+            while you pair.
+          </p>
+        </div>
+        <button id="keys" type="button">API keys</button>
+      </section>
+      <p id="keyStatus" class="note" role="status"></p>
+      <form id="profiles">
+        <section class="profile" data-agent="explorer">
+          <div class="profile-heading">
+            <div>
+              <h2>Explorer</h2>
+              <p>
+                Service discovery, file relationships and concise source
+                summaries.
+              </p>
+            </div>
+            <label class="enabled"
+              ><input type="checkbox" id="explorer-enabled" />Enabled</label
+            >
+          </div>
+          <div class="fields">
+            <label>Model<select id="explorer-model"></select></label
+            ><label
+              >Reasoning<select id="explorer-effort">
+                <option value="none">Off</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select></label
+            >
+          </div>
+          <label
+            >Instructions<textarea
+              id="explorer-instructions"
+              maxlength="8000"
+              rows="4"
+              spellcheck="false"
+            ></textarea>
+          </label>
+        </section>
+        <section class="profile" data-agent="deep_research">
+          <div class="profile-heading">
+            <div>
+              <h2>Deep research</h2>
+              <p>
+                Complex architecture, cross-service reasoning and subtle failure
+                modes.
+              </p>
+            </div>
+            <label class="enabled"
+              ><input
+                type="checkbox"
+                id="deep_research-enabled"
+              />Enabled</label
+            >
+          </div>
+          <div class="fields">
+            <label>Model<select id="deep_research-model"></select></label
+            ><label
+              >Reasoning<select id="deep_research-effort">
+                <option value="none">Off</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select></label
+            >
+          </div>
+          <label
+            >Instructions<textarea
+              id="deep_research-instructions"
+              maxlength="8000"
+              rows="4"
+              spellcheck="false"
+            ></textarea>
+          </label>
+        </section>
+        <p class="note">
+          These agents use Together AI and can only inspect permitted source.
+          Web research requires an explicit request. Instructions cannot enable
+          writes, shell access or recursive delegation.
+        </p>
+        <p class="note">
+          Off disables thinking. Low, Medium and High guide reasoning depth
+          through instructions; they are not hard compute limits on these
+          models. Background service orientation uses Explorer. Cerebras can
+          request either profile; high-complexity explicit exploration defaults
+          to Deep research.
+        </p>
+        <div class="actions">
+          <button id="save" type="submit" disabled>Save changes</button>
+          <p id="status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </main>
+    <script nonce="{{nonce}}" src="{{js}}"></script>
+  </body>
+</html>

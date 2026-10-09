@@ -1,5 +1,5 @@
 import { voiceInstructions } from "./prompts.js";
-export type Provider = "groq" | "cerebras";
+export type Provider = "cerebras" | "together";
 export interface HistoryEntry {
   role: "user" | "assistant";
   text: string;

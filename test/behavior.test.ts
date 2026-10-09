@@ -145,8 +145,8 @@ test("startup seeds bounded final conversation and editor reference without prov
   );
   assert.equal(session.input[2].content[0].type, "output_text");
 });
-test("Qwen tool loop returns matched tool results and explicit provider effort without leaking reasoning", async () => {
-  for (const provider of ["groq", "cerebras"] as const) {
+test("Cerebras/Together tool loops match results and keep thinking private to the correct provider", async () => {
+  for (const provider of ["together", "cerebras"] as const) {
     const requests: Record<string, unknown>[] = [];
     let executions = 0;
     const result = await requestBackend({
@@ -200,16 +200,23 @@ test("Qwen tool loop returns matched tool results and explicit provider effort w
     });
     assert.equal(executions, 1);
     assert.equal(result.status, "answer");
-    assert.equal(requests[0].reasoning_effort, "medium");
+    assert.equal(
+      requests[0].reasoning_effort,
+      provider === "together" ? undefined : "medium",
+    );
     assert.equal(
       requests[0].reasoning_format,
-      provider === "groq" ? "hidden" : "parsed",
+      provider === "together" ? undefined : "parsed",
     );
+    if (provider === "together")
+      assert.deepEqual(requests[0].reasoning, { enabled: true });
     assert.equal(requests[0].response_format, undefined);
     assert.match(JSON.stringify(requests[1].messages), /"tool_call_id":"r1"/);
-    assert.ok(
-      !JSON.stringify(requests[1]).includes("SECRET_REASONING_TEST_MARKER"),
+    assert.equal(
+      JSON.stringify(requests[1]).includes("SECRET_REASONING_TEST_MARKER"),
+      provider === "together",
     );
+    assert.doesNotMatch(JSON.stringify(result), /SECRET_REASONING_TEST_MARKER/);
   }
 });
 test("cancellation stops waiting for an uninterruptible tool and suppresses continuation", async () => {
@@ -217,8 +224,8 @@ test("cancellation stops waiting for an uninterruptible tool and suppresses cont
   let calls = 0;
   await assert.rejects(
     requestBackend({
-      provider: "groq",
-      model: DEFAULT_MODELS.groq,
+      provider: "together",
+      model: DEFAULT_MODELS.together,
       apiKey: "fake",
       history: [],
       signal: cancel.signal,
@@ -259,8 +266,8 @@ test("cancellation stops waiting for an uninterruptible tool and suppresses cont
 test("inline insertion uses no tools or reasoning and enforces its output contract", async () => {
   let request: Record<string, unknown> = {};
   const value = await requestInline({
-    provider: "groq",
-    model: DEFAULT_MODELS.groq,
+    provider: "together",
+    model: DEFAULT_MODELS.together,
     apiKey: "fake",
     context: focus,
     signal: new AbortController().signal,
@@ -272,7 +279,8 @@ test("inline insertion uses no tools or reasoning and enforces its output contra
     }) as typeof fetch,
   });
   assert.equal(value, " + 2");
-  assert.equal(request.reasoning_effort, "none");
+  assert.equal(request.reasoning_effort, undefined);
+  assert.deepEqual(request.reasoning, { enabled: false });
   assert.equal(request.tools, undefined);
 });
 test("workspace reads reject traversal, secret files, and symlinks escaping roots", async () => {

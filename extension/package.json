@@ -113,6 +113,10 @@
       {
         "command": "pairCode.endVoice",
         "title": "Zen: End Voice Session"
+      },
+      {
+        "command": "pairCode.agentSettings",
+        "title": "Zen: Agent Settings"
       }
     ],
     "keybindings": [
@@ -157,25 +161,6 @@
     "configuration": {
       "title": "Pair Code",
       "properties": {
-        "pairCode.backend": {
-          "type": "string",
-          "enum": [
-            "groq",
-            "cerebras"
-          ],
-          "default": "groq",
-          "description": "Provider for code reasoning and edit proposals."
-        },
-        "pairCode.groqModel": {
-          "type": "string",
-          "default": "qwen/qwen3.8-27b",
-          "description": "Groq model ID."
-        },
-        "pairCode.cerebrasModel": {
-          "type": "string",
-          "default": "qwen-3.8-27b",
-          "description": "Cerebras model ID. Availability depends on your account."
-        },
         "pairCode.voice": {
           "type": "string",
           "default": "marin",
@@ -253,6 +238,75 @@
           "default": "http://127.0.0.1:9077",
           "scope": "application",
           "description": "Authenticated local Hindsight endpoint. Only literal 127.0.0.1 HTTP is supported. Configure the token through Manage Personal Memory."
+        },
+        "pairCode.subagents": {
+          "type": "object",
+          "default": {},
+          "scope": "application",
+          "description": "Local research profiles. Configure with Zen: Agent Settings. Applies to new work; source-sharing and tool policy still apply.",
+          "additionalProperties": false,
+          "properties": {
+            "explorer": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "string",
+                  "enum": [
+                    "deepseek-ai/DeepSeek-V4.1-Flash",
+                    "deepseek-ai/DeepSeek-V4-Pro-0813",
+                    "zai-org/GLM-5.3-Flash"
+                  ]
+                },
+                "reasoningEffort": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                },
+                "instructions": {
+                  "type": "string",
+                  "maxLength": 8000
+                }
+              }
+            },
+            "deep_research": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "string",
+                  "enum": [
+                    "deepseek-ai/DeepSeek-V4.1-Flash",
+                    "deepseek-ai/DeepSeek-V4-Pro-0813",
+                    "zai-org/GLM-5.3-Flash"
+                  ]
+                },
+                "reasoningEffort": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                },
+                "instructions": {
+                  "type": "string",
+                  "maxLength": 8000
+                }
+              }
+            }
+          }
         }
       }
     },

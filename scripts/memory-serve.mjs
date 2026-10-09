@@ -17,9 +17,9 @@ const keys = {
   ...(keyFile ? parseEnv(readFileSync(path.resolve(keyFile), "utf8")) : {}),
   ...process.env,
 };
-if (!keys.OPENAI_API_KEY || !(keys.GROQ_API_KEY || keys.CEREBRAS_API_KEY)) {
+if (!keys.OPENAI_API_KEY || !keys.CEREBRAS_API_KEY) {
   throw new Error(
-    "Set OPENAI_API_KEY and GROQ_API_KEY or CEREBRAS_API_KEY, or pass your existing .env path.",
+    "Set OPENAI_API_KEY and CEREBRAS_API_KEY, or pass your existing .env path.",
   );
 }
 const directory = path.join(homedir(), ".config/zen/hindsight");
@@ -43,7 +43,6 @@ if (
   token.length < 32
 )
   throw new Error("Invalid local Hindsight connection file.");
-const groq = Boolean(keys.GROQ_API_KEY);
 const env = {
   ...process.env,
   HINDSIGHT_API_HOST: "127.0.0.1",
@@ -53,11 +52,9 @@ const env = {
     "hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension",
   HINDSIGHT_API_TENANT_API_KEY: token,
   HINDSIGHT_API_LLM_PROVIDER: "openai",
-  HINDSIGHT_API_LLM_BASE_URL: groq
-    ? "https://api.groq.com/openai/v1"
-    : "https://api.cerebras.ai/v1",
-  HINDSIGHT_API_LLM_API_KEY: groq ? keys.GROQ_API_KEY : keys.CEREBRAS_API_KEY,
-  HINDSIGHT_API_LLM_MODEL: groq ? "qwen/qwen3.8-27b" : "qwen-3.8-27b",
+  HINDSIGHT_API_LLM_BASE_URL: "https://api.cerebras.ai/v1",
+  HINDSIGHT_API_LLM_API_KEY: keys.CEREBRAS_API_KEY,
+  HINDSIGHT_API_LLM_MODEL: "qwen-3.8-27b",
   HINDSIGHT_API_EMBEDDINGS_PROVIDER: "openai",
   HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY: keys.OPENAI_API_KEY,
   HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL: "text-embedding-3-small",

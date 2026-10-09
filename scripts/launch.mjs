@@ -46,7 +46,6 @@ if (!existsSync(settingsFile))
         "extensions.autoCheckUpdates": false,
         "extensions.autoUpdate": false,
         "security.workspace.trust.enabled": true,
-        "pairCode.backend": "groq",
       },
       null,
       2,

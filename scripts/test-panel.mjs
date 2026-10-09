@@ -34,7 +34,7 @@ try {
             type: "configuration",
             openaiReady: true,
             backendReady: true,
-            provider: "groq",
+            provider: "cerebras",
             inlineMode: "manual",
             shareContext: true,
           });
@@ -280,7 +280,7 @@ try {
       type: "configuration",
       openaiReady: true,
       backendReady: true,
-      provider: "groq",
+      provider: "cerebras",
       assistanceLevel: 25,
     }),
   );
@@ -747,7 +747,7 @@ try {
       type: "configuration",
       openaiReady: true,
       backendReady: true,
-      provider: "groq",
+      provider: "cerebras",
       assistanceLevel: 25,
     }),
   );
@@ -879,7 +879,7 @@ try {
       type: "configuration",
       openaiReady: false,
       backendReady: true,
-      provider: "groq",
+      provider: "cerebras",
       shareContext: true,
     }),
   );

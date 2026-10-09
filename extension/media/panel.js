@@ -484,6 +484,7 @@
     ["switchTheme", "toggleTheme"],
 
     ["applyLayout", "applyLayout"],
+    ["agentSettings", "agentSettings"],
     ["manageMemory", "manageMemory"],
     ["resumePairing", "resumePairing"],
     ["freshPairing", "freshPairing"],
@@ -540,9 +541,6 @@
   showAssistance(25);
   $("inlineMode").addEventListener("change", () =>
     post({ type: "inlineMode", mode: $("inlineMode").value }),
-  );
-  $("provider").addEventListener("change", () =>
-    post({ type: "provider", provider: $("provider").value }),
   );
   function renderTranscript(entries) {
     const log = $("transcript");
@@ -714,7 +712,6 @@
         : openaiReady);
       $("resumePairing").disabled =
         ready || !(mode === "chat" ? backendReady : openaiReady);
-      $("provider").value = data.provider;
       $("inlineMode").value = data.inlineMode ?? "manual";
       $("assistanceLevel").value = data.assistanceLevel ?? 25;
       showAssistance(data.assistanceLevel ?? 25);
@@ -725,12 +722,11 @@
       $("setup").querySelector("span").textContent = !data.openaiReady
         ? "Add an OpenAI key for voice pairing."
         : !data.backendReady
-          ? `Add a ${data.provider === "groq" ? "Groq" : "Cerebras"} key for code reasoning.`
+          ? "Add a Cerebras key for code reasoning."
           : "Models connected.";
       $("contextSharing").textContent = data.shareContext
         ? "Editor context on"
         : "Context off";
-      $("provider").title = data.model;
       $("shareContext").checked = data.shareContext;
       $("followPair").checked = data.followPair ?? true;
     }

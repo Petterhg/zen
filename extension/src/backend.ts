@@ -27,13 +27,14 @@ import {
 } from "./backend-schema.js";
 import type { TraceEvent } from "./trace.js";
 import { researchFromTool, type ResearchArticle } from "./research.js";
+import { RESEARCH_MODELS, togetherReasoning } from "./subagents.js";
 export const DEFAULT_MODELS: Record<Provider, string> = {
-  groq: "qwen/qwen3.8-27b",
   cerebras: "qwen-3.8-27b",
+  together: RESEARCH_MODELS[0],
 };
 const endpoints: Record<Provider, string> = {
-  groq: "https://api.groq.com/openai/v1/chat/completions",
   cerebras: "https://api.cerebras.ai/v1/chat/completions",
+  together: "https://api.together.ai/v1/chat/completions",
 };
 export interface BackendTool {
   failureDomain?: string;
@@ -76,6 +77,9 @@ interface Message {
   content?: string | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  // Ephemeral Together wire context only, never trace/speaker/main-agent data.
+  reasoning?: string;
+  reasoning_content?: string;
 }
 function seedHistory(history: HistoryEntry[]): HistoryEntry[] {
   // Startup has an 8,192-token ceiling. A conservative byte budget also covers non-Latin speech.
@@ -167,6 +171,17 @@ async function complete(
         ? fastEffort
         : (options.effort ?? "medium");
   const structured = !tools?.length || final;
+  const together = options.provider === "together";
+  const reasoning = togetherReasoning(effort);
+  if (together)
+    messages = messages.map((m, i) =>
+      i === 0
+        ? {
+            ...m,
+            content: m.content + "\n" + reasoning.guidance,
+          }
+        : m,
+    );
   const started = Date.now();
   trace(options, {
     type: "provider.request",
@@ -193,15 +208,15 @@ async function complete(
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
       },
+      redirect: "error",
       body: JSON.stringify({
         model: options.model,
         messages,
         max_tokens: maxTokens,
         stream: false,
-        reasoning_effort: effort,
-        ...(options.provider === "groq"
-          ? { reasoning_format: "hidden" }
-          : { reasoning_format: "parsed" }),
+        ...(together
+          ? reasoning.parameters
+          : { reasoning_effort: effort, reasoning_format: "parsed" }),
         ...(!structured
           ? {
               tools: tools!.map(({ name, description, parameters }) => ({
@@ -213,7 +228,11 @@ async function complete(
             }
           : {
               response_format:
-                options.model === DEFAULT_MODELS[options.provider]
+                options.model === DEFAULT_MODELS[options.provider] ||
+                (together &&
+                  RESEARCH_MODELS.includes(
+                    options.model as (typeof RESEARCH_MODELS)[number],
+                  ))
                   ? {
                       type: "json_schema",
                       json_schema: {
@@ -222,7 +241,7 @@ async function complete(
                           : inline
                             ? "inline_insertion"
                             : "pair_result",
-                        strict: true,
+                        ...(!together ? { strict: true } : {}),
                         schema: contextAnswer
                           ? CONTEXT_ANSWER_SCHEMA
                           : inline
@@ -326,11 +345,27 @@ async function complete(
       "empty_response",
       "The code backend returned no answer.",
     );
-  // Explicitly retain only answer/tool fields; provider reasoning is never forwarded.
+  if (message.content && /<\/?think>/i.test(message.content))
+    throw new BackendError(
+      "reasoning_content",
+      "Provider reasoning was mixed into the answer. No result was delivered.",
+    );
+  // Together needs original thinking fields for tool continuity. They stay in this
+  // isolated request, never in BackendResult, callbacks, traces or parent context.
   return {
     role: "assistant",
     content: message.content,
     tool_calls: message.tool_calls,
+    ...(together && message.tool_calls?.length
+      ? {
+          ...(typeof message.reasoning === "string"
+            ? { reasoning: message.reasoning }
+            : {}),
+          ...(typeof message.reasoning_content === "string"
+            ? { reasoning_content: message.reasoning_content }
+            : {}),
+        }
+      : {}),
   };
 }
 async function executeTool(

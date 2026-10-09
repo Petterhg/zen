@@ -3,9 +3,6 @@ export function configurationRequiresCancellation(
   affects: (name: string) => boolean,
 ): boolean {
   return [
-    "backend",
-    "groqModel",
-    "cerebrasModel",
     "reasoningEffort",
     "backendTimeoutSeconds",
     "shareEditorContext",
