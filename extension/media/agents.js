@@ -251,18 +251,58 @@
   function send(type, extra = {}) {
     host.postMessage({ type, revision, ...extra });
   }
-  $("agentsTab").onclick = () => {
-    $("profiles").hidden = false;
-    $("toolsPage").hidden = true;
-    $("agentsTab").setAttribute("aria-pressed", "true");
-    $("toolsTab").setAttribute("aria-pressed", "false");
+  const sections = {
+    general: {
+      page: "generalPage",
+      title: "General",
+      description: "Your editor, your way of working.",
+    },
+    agents: {
+      page: "profiles",
+      title: "Agents",
+      description: "Choose who helps, when they work, and what they can do.",
+    },
+    tools: {
+      page: "toolsPage",
+      title: "Tools",
+      description: "Give each agent the capabilities it needs.",
+    },
   };
-  $("toolsTab").onclick = () => {
-    $("profiles").hidden = true;
-    $("toolsPage").hidden = false;
-    $("agentsTab").setAttribute("aria-pressed", "false");
-    $("toolsTab").setAttribute("aria-pressed", "true");
-  };
+  function navigate(section) {
+    if (!Object.hasOwn(sections, section)) return;
+    for (const [name, item] of Object.entries(sections)) {
+      $(item.page).hidden = name !== section;
+      $(name + "Tab").setAttribute("aria-pressed", String(name === section));
+    }
+    $("pageTitle").textContent = sections[section].title;
+    $("pageDescription").textContent = sections[section].description;
+    $("definitionActions").hidden = section === "general";
+  }
+  for (const section of Object.keys(sections))
+    $(section + "Tab").onclick = () => navigate(section);
+  for (const key of [
+    "theme",
+    "inlineMode",
+    "shareContext",
+    "followPair",
+    "indexEnabled",
+  ])
+    $(key).onchange = () => {
+      $("generalStatus").textContent = "Saving…";
+      send("generalChange", {
+        key,
+        value: $(key).type === "checkbox" ? $(key).checked : $(key).value,
+      });
+    };
+  for (const action of [
+    "applyLayout",
+    "manageMemory",
+    "showTrace",
+    "refreshIndex",
+    "editorSettings",
+    "keyboardSettings",
+  ])
+    $(action).onclick = () => send("generalAction", { action });
   for (const type of ["definitions", "import", "export"])
     $(type).onclick = () => send(type);
   $("toolSelect").onchange = selectTool;
@@ -312,7 +352,99 @@
       input: $("testInput").value,
     });
   };
+  function renderIndex(data) {
+    const active = [
+      "starting",
+      "connecting",
+      "scanning",
+      "indexing",
+      "updating",
+      "embedding",
+    ].includes(data.state);
+    const label = {
+      starting: "Shared code index starting…",
+      connecting: "Connecting to shared code index…",
+      scanning: "Scanning repository…",
+      indexing: `Indexing · ${data.processed ?? 0} / ${data.total ?? "?"} files checked`,
+      updating: "Updating changed files…",
+      embedding: "Updating semantic search…",
+      ready: data.pendingEmbeddings
+        ? `Search ready · ${data.pendingEmbeddings} files awaiting embeddings`
+        : `Code index ready · ${data.files} files`,
+      paused: "Code index paused",
+      untrusted: "Code index waiting for workspace trust",
+      error:
+        data.files > 0 && data.pendingEmbeddings > 0
+          ? "Text search ready · embeddings need attention"
+          : "Code index needs attention",
+    };
+    $("indexStatus").textContent =
+      label[data.state] || `Code index ${data.state}`;
+    const progress = $("indexProgress");
+    progress.classList.toggle("hidden", !active);
+    if (data.state === "indexing" && data.total > 0) {
+      progress.max = data.total;
+      progress.value = data.processed || 0;
+    } else progress.removeAttribute("value");
+    $("indexDetail").textContent =
+      data.state === "paused"
+        ? "Enable Code Index and Share Editor Context in settings to resume."
+        : data.state === "connecting"
+          ? "One shared index on this computer. Connecting or recovering the local service; totals are unavailable until it responds."
+          : data.state === "untrusted"
+            ? "Trust this workspace to enable indexing."
+            : [
+                data.shared && "Shared on this computer",
+                data.repository,
+                data.pendingEmbeddings > 0 &&
+                  "Changed files searchable by text now; embeddings after 30 min quiet (60 min maximum)",
+                data.pendingEmbeddings > 0 &&
+                  Number.isFinite(data.nextEmbeddingAt) &&
+                  `Next embeddings ${new Date(data.nextEmbeddingAt).toLocaleTimeString()}`,
+                data.migrationDeferred &&
+                  "Old index cleanup will finish after older Zen windows close",
+                active && data.currentFile,
+                data.coverageKnown &&
+                  `${data.files} files · ${data.chunks} chunks stored`,
+                data.processed !== undefined &&
+                  `${data.embedded ?? 0} chunks embedded · ${data.reused ?? 0} cached chunks reused this pass`,
+                data.updatedAt &&
+                  `Updated ${new Date(data.updatedAt).toLocaleTimeString()}`,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+    $("indexError").textContent = data.error
+      ? `${data.error} Fix the cause, then choose Refresh index to retry.`
+      : "";
+    $("indexError").classList.toggle("hidden", !data.error);
+    $("indexStatus").title =
+      "Shared local Turso · OpenAI small / 768. Totals cover this window’s registered checkouts; files checked includes unchanged or excluded candidates.";
+  }
   window.addEventListener("message", ({ data }) => {
+    if (data.type === "navigate") navigate(data.section);
+    if (["generalSaved", "generalError"].includes(data.type)) {
+      $("generalStatus").textContent = data.text;
+      $("generalStatus").classList.toggle(
+        "error",
+        data.type === "generalError",
+      );
+    }
+    if (data.type === "general") {
+      for (const key of [
+        "theme",
+        "inlineMode",
+        "shareContext",
+        "followPair",
+        "indexEnabled",
+      ]) {
+        if (data[key] === undefined) continue;
+        if ($(key).type === "checkbox") $(key).checked = data[key];
+        else $(key).value = data[key];
+      }
+      $("contextFile").textContent = data.contextFile ?? "No shared file";
+      if (data.indexStatus) renderIndex(data.indexStatus);
+    }
+
     if (data.type === "testResult")
       $("testResult").textContent =
         data.output + "\n\n" + JSON.stringify(data.history, null, 2);

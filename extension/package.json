@@ -117,6 +117,10 @@
       {
         "command": "pairCode.agentSettings",
         "title": "Zen: Agent Settings"
+      },
+      {
+        "command": "pairCode.settings",
+        "title": "Zen: Settings"
       }
     ],
     "keybindings": [
@@ -156,6 +160,12 @@
         "command": "pairCode.toggleWorkboard",
         "key": "ctrl+alt+j",
         "mac": "cmd+alt+j"
+      },
+      {
+        "command": "pairCode.settings",
+        "key": "ctrl+,",
+        "mac": "cmd+,",
+        "when": "zen.available"
       }
     ],
     "configuration": {

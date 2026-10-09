@@ -10,9 +10,13 @@ import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 import { RESEARCH_MODELS } from "./subagents.js";
 
+export type SettingsSection = "general" | "agents" | "tools";
+
 /** Dedicated settings surface. Secrets and provider calls remain in the host. */
 export class AgentSettings implements vscode.Disposable {
   private panel?: vscode.WebviewPanel;
+  private section: SettingsSection = "general";
+  private listeners: vscode.Disposable[];
   constructor(
     private context: vscode.ExtensionContext,
     private configureKeys: () => Promise<void>,
@@ -25,16 +29,32 @@ export class AgentSettings implements vscode.Disposable {
       description: string;
       parameters: Record<string, unknown>;
     }[],
-  ) {}
-  open(): void {
+    private generalState: () => object,
+  ) {
+    this.listeners = [
+      vscode.workspace.onDidChangeConfiguration(() => this.updateGeneral()),
+      vscode.window.onDidChangeActiveColorTheme(() => this.updateGeneral()),
+    ];
+  }
+  updateGeneral(): void {
+    if (this.panel)
+      void this.panel.webview.postMessage({
+        ...this.generalState(),
+        type: "general",
+      });
+  }
+  open(section: SettingsSection = "general"): void {
+    this.section = section;
     if (this.panel) {
       this.panel.reveal();
+      void this.panel.webview.postMessage({ type: "navigate", section });
+      this.updateGeneral();
       return;
     }
     const media = vscode.Uri.joinPath(this.context.extensionUri, "media");
     const panel = vscode.window.createWebviewPanel(
       "zen.agentSettings",
-      "Zen · Agent settings",
+      "Zen Settings",
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -51,8 +71,66 @@ export class AgentSettings implements vscode.Disposable {
         return;
       const data = message as Record<string, unknown>;
       try {
-        if (data.type === "ready") await this.publish();
-        else if (data.type === "configureKeys") {
+        if (data.type === "ready") {
+          this.updateGeneral();
+          void panel.webview.postMessage({
+            type: "navigate",
+            section: this.section,
+          });
+          await this.publish();
+        } else if (data.type === "generalChange") {
+          const properties: Record<string, string> = {
+            inlineMode: "inlineSuggestions",
+            shareContext: "shareEditorContext",
+            followPair: "followPair",
+            indexEnabled: "indexEnabled",
+          };
+          const key = String(data.key);
+          if (key === "theme") {
+            if (!["light", "dark"].includes(String(data.value)))
+              throw new Error("Invalid theme.");
+            await vscode.workspace
+              .getConfiguration("workbench")
+              .update(
+                "colorTheme",
+                data.value === "light" ? "Zen Light" : "Zen Dark",
+                vscode.ConfigurationTarget.Global,
+              );
+          } else {
+            if (
+              !Object.hasOwn(properties, key) ||
+              (key === "inlineMode"
+                ? !["off", "manual", "automatic"].includes(String(data.value))
+                : typeof data.value !== "boolean")
+            )
+              throw new Error("Invalid preference.");
+            await vscode.workspace
+              .getConfiguration("pairCode")
+              .update(
+                properties[key],
+                data.value,
+                vscode.ConfigurationTarget.Global,
+              );
+          }
+          this.updateGeneral();
+          void panel.webview.postMessage({
+            type: "generalSaved",
+            text: "Saved.",
+          });
+        } else if (data.type === "generalAction") {
+          const commands: Record<string, string> = {
+            applyLayout: "pairCode.applyLayout",
+            manageMemory: "pairCode.manageMemory",
+            showTrace: "pairCode.showTrace",
+            refreshIndex: "pairCode.refreshIndex",
+            editorSettings: "workbench.action.openSettings",
+            keyboardSettings: "workbench.action.openGlobalKeybindings",
+          };
+          if (!Object.hasOwn(commands, String(data.action)))
+            throw new Error("Unknown settings action.");
+          await vscode.commands.executeCommand(commands[String(data.action)]);
+          this.updateGeneral();
+        } else if (data.type === "configureKeys") {
           await this.configureKeys();
           await this.publish(false);
         } else if (data.type === "save") {
@@ -217,8 +295,11 @@ export class AgentSettings implements vscode.Disposable {
           }
         }
       } catch (error) {
+        const general =
+          data.type === "generalChange" || data.type === "generalAction";
+        if (general) this.updateGeneral();
         void panel.webview.postMessage({
-          type: "error",
+          type: general ? "generalError" : "error",
           text:
             error instanceof Error
               ? error.message
@@ -249,7 +330,7 @@ export class AgentSettings implements vscode.Disposable {
             .toString(),
         );
     })().catch(() =>
-      vscode.window.showErrorMessage("Could not open Zen Agent settings."),
+      vscode.window.showErrorMessage("Could not open Zen Settings."),
     );
   }
   private async publish(profiles = true): Promise<void> {
@@ -285,6 +366,7 @@ export class AgentSettings implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.listeners.forEach((listener) => listener.dispose());
     this.panel?.dispose();
   }
 }

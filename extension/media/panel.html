@@ -58,9 +58,8 @@
         <button
           id="toggleSettings"
           class="icon-button"
-          aria-label="Pairing settings"
-          aria-expanded="false"
-          title="Pairing settings"
+          aria-label="Open Zen Settings"
+          title="Open Zen Settings"
         >
           ⚙
         </button>
@@ -169,97 +168,12 @@
           <span class="working-dot"></span><span>Thinking about your code…</span
           ><button id="cancel" class="text-button">Stop</button>
         </div>
-        <details id="pairingSettings" class="pairing-settings">
-          <summary>Pairing settings</summary>
-          <h2 class="settings-title">Pairing settings</h2>
-          <span id="workspaceLabel" hidden></span>
-          <p id="deliveryStatus" class="stale" aria-live="polite"></p>
-          <div id="setup" class="setup-note">
-            <span>Connect your models to begin.</span
-            ><button id="setupKeys" class="text-button">Add API Keys ↗</button>
-          </div>
-          <span class="eyebrow block-label">SHARED EDITOR CONTEXT</span>
-          <section class="context-bar" aria-label="Shared editor context">
-            <span class="file-icon" aria-hidden="true">⌘</span
-            ><span id="contextFile">No shared file</span
-            ><span id="selectionBadge"></span>
-          </section>
-
-          <section
-            id="taskIntent"
-            class="task-intent hidden"
-            aria-label="Current intent"
-          >
-            <span class="eyebrow block-label">THE INTENT</span>
-            <p id="taskIntentText"></p>
-          </section>
-          <p id="checkpointNote" class="session-note hidden" role="status"></p>
-          <section class="code-index" aria-label="Code indexing">
-            <div class="settings-row">
-              <span id="indexStatus" role="status">Code index starting…</span
-              ><button
-                id="refreshIndex"
-                class="text-button"
-                title="Refresh code index"
-              >
-                ↻
-              </button>
-            </div>
-            <progress
-              id="indexProgress"
-              class="hidden"
-              aria-label="Files checked in current repository"
-            ></progress>
-            <details class="index-details">
-              <summary>Index details</summary>
-              <p id="indexDetail" class="quiet-note"></p>
-            </details>
-          </section>
-          <div class="settings-row">
-            <button id="configure" class="text-button">API keys</button
-            ><button id="agentSettings" class="text-button">
-              Agent settings ↗</button
-            ><button id="applyLayout" class="text-button">
-              Apply calm layout
-            </button>
-          </div>
-
-          <div class="context-bar">
-            <label for="inlineMode">Inline suggestions</label
-            ><select id="inlineMode">
-              <option value="off">Off</option>
-              <option value="manual">On request</option>
-              <option value="automatic">Automatic</option>
-            </select>
-          </div>
-          <div class="settings-row"></div>
-          <div class="settings-row">
-            <label
-              ><input type="checkbox" id="shareContext" checked /> Share editor
-              context</label
-            >
-            <button id="manageMemory" class="text-button">
-              Personal memory
-            </button>
-            <button id="showTrace" class="text-button">
-              Open session trace
-            </button>
-          </div>
-          <div class="settings-row">
-            <label
-              ><input type="checkbox" id="followPair" checked /> Follow Pair in
-              the editor</label
-            >
-          </div>
-          <footer>
-            <span class="model-label">gpt-live-1</span
-            ><span class="footer-separator">/</span
-            ><span class="model-label">Cerebras</span
-            ><span class="footer-right" id="contextSharing"
-              >Editor context on</span
-            >
-          </footer>
-        </details>
+        <p id="deliveryStatus" class="stale" aria-live="polite"></p>
+        <p id="checkpointNote" class="session-note hidden" role="status"></p>
+        <div id="setup" class="setup-note">
+          <span>Connect your models to begin.</span
+          ><button id="setupKeys" class="text-button">Open Settings ↗</button>
+        </div>
       </div>
       <section id="chatView" class="chat-view hidden" aria-label="Conversation">
         <div

@@ -1,6 +1,6 @@
 # Tools and agents
 
-Open **Zen: Agent Settings** (or the workboard gear → Agent settings). The **Agents** and **Tools** tabs share the same owner-local definitions. **Definition files** reveals the folder; **Import** and **Export** use native file pickers. No repository file is automatically executed or registered.
+Open **Zen: Settings** (or the workboard gear), then select **Agents** or **Tools** in the left menu. The **Agents** and **Tools** tabs share the same owner-local definitions. **Definition files** reveals the folder; **Import** and **Export** use native file pickers. No repository file is automatically executed or registered.
 
 ## Agent definition
 
@@ -103,3 +103,5 @@ Validation distinguishes offline fixtures, live synthetic model calls, native ed
 ## Validation of this implementation
 
 Offline regression checks cover schema errors, process timeout/cancellation, environment filtering, stale settings saves, definition grants, dirty-buffer snapshots, ignored/new paths, tool revocation, guidance-only mode and stale multi-file acceptance. Browser tests exercise the actual settings assets with a simulated host. A live synthetic Cerebras → Together Flash task edited two files, ran its assigned check successfully and returned a proposal while the original checkout stayed unchanged. A disposable native editor check verified multi-file acceptance, unsaved buffers and grouped Undo. Human voice pairing with implementation workers remains to be tested together.
+
+The workboard gear opens the same Settings editor at General. Select **Agents** or **Tools** in its left menu. Switching sections preserves unsaved definition edits; use the section’s Save controls to persist them. **Zen: Agent Settings** remains available as a command deep link.

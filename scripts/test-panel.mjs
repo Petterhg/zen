@@ -154,24 +154,6 @@ try {
   await page.evaluate(() =>
     window.host({
       type: "indexStatus",
-      state: "indexing",
-      processed: 3,
-      total: 10,
-      currentFile: "src/main.py",
-      repository: "demo",
-      embedded: 4,
-      reused: 2,
-    }),
-  );
-  assert.match(await page.locator("#indexStatus").textContent(), /3 \/ 10/);
-  assert.equal(await page.locator("#indexProgress").getAttribute("value"), "3");
-  assert.match(
-    await page.locator("#indexDetail").textContent(),
-    /src\/main.py/,
-  );
-  await page.evaluate(() =>
-    window.host({
-      type: "indexStatus",
       state: "error",
       error: "Embedding request failed (429).",
     }),
@@ -181,80 +163,7 @@ try {
   await page.evaluate(() =>
     window.host({ type: "indexStatus", state: "ready", files: 8 }),
   );
-  assert.equal(await page.locator("#indexProgress").isVisible(), false);
   assert.equal(await page.locator("#indexError").isVisible(), false);
-  await page.evaluate(() =>
-    window.host({
-      type: "indexStatus",
-      state: "connecting",
-      shared: true,
-      files: 0,
-    }),
-  );
-  assert.equal(await page.locator("#indexError").isVisible(), false);
-  assert.match(await page.locator("#indexDetail").textContent(), /unavailable/);
-  assert.doesNotMatch(
-    await page.locator("#indexDetail").textContent(),
-    /0 chunks/,
-  );
-  await page.evaluate(() =>
-    window.host({
-      type: "indexStatus",
-      state: "ready",
-      files: 8,
-      chunks: 24,
-      coverageKnown: true,
-      processed: 0,
-      embedded: 0,
-      reused: 0,
-    }),
-  );
-  assert.match(
-    await page.locator("#indexDetail").textContent(),
-    /8 files · 24 chunks stored/,
-  );
-
-  await page.evaluate(() =>
-    window.host({
-      type: "indexStatus",
-      state: "ready",
-      files: 8,
-      chunks: 24,
-      coverageKnown: true,
-      pendingEmbeddings: 3,
-      nextEmbeddingAt: Date.now() + 30 * 60000,
-    }),
-  );
-  assert.match(
-    await page.locator("#indexStatus").textContent(),
-    /Search ready.*3 files awaiting embeddings/,
-  );
-  assert.match(
-    await page.locator("#indexDetail").textContent(),
-    /searchable by text now/,
-  );
-  assert.equal(await page.locator("#indexProgress").isVisible(), false);
-  await page.evaluate(() =>
-    window.host({
-      type: "indexStatus",
-      state: "error",
-      files: 8,
-      pendingEmbeddings: 3,
-      error: "Synthetic embedding outage",
-    }),
-  );
-  assert.match(
-    await page.locator("#indexStatus").textContent(),
-    /Text search ready/,
-  );
-  await page.evaluate(() =>
-    window.host({
-      type: "indexStatus",
-      state: "ready",
-      files: 8,
-      pendingEmbeddings: 0,
-    }),
-  );
 
   assert.equal(
     await page.locator("#assistanceLevel").getAttribute("step"),
@@ -262,7 +171,8 @@ try {
   );
   assert.equal(await page.locator("#assistanceLevel").inputValue(), "25");
   assert.equal(await page.locator("#assistanceLevel").isVisible(), true);
-  assert.equal(await page.locator("#inlineMode").isVisible(), false);
+  assert.equal(await page.locator("#inlineMode").count(), 0);
+  assert.equal(await page.locator("#pairingSettings").count(), 0);
   await page.locator("#toggleSettings").click();
   await page.locator("#assistanceLevel").fill("0");
   assert.equal(
@@ -291,22 +201,8 @@ try {
       assistanceLevel: 25,
     }),
   );
-  await page.evaluate(() =>
-    window.host({
-      type: "taskIntent",
-      text: "Explain the <script>retry</script> function before we change it.",
-    }),
-  );
-  assert.equal(await page.locator("#taskIntent script").count(), 0);
-  assert.equal(
-    await page.locator("#taskIntentText").textContent(),
-    "Explain the <script>retry</script> function before we change it.",
-  );
   // The uncluttered workboard shows voice and assistance; diagnostics/configuration are opt-in.
   await page.setViewportSize({ width: 325, height: 900 });
-  await page.evaluate(() => {
-    document.getElementById("pairingSettings").open = false;
-  });
   assert.equal(await page.locator("#resumePairing").isVisible(), false);
   await page.evaluate(() =>
     window.host({ type: "conversationAvailable", available: true }),
@@ -322,7 +218,7 @@ try {
   const voiceBox = await page.locator(".voice-card").boundingBox();
   const sliderBox = await page.locator(".pairing-style").boundingBox();
   assert.ok(voiceBox && sliderBox && voiceBox.y < sliderBox.y);
-  assert.equal(await page.locator(".code-index").isVisible(), false);
+  assert.equal(await page.locator(".code-index").count(), 0);
   assert.equal(await page.locator("#composer").isVisible(), false);
   assert.equal(await page.locator("#connect").count(), 1);
   assert.equal(await page.locator("#foldWorkboard").count(), 0);
@@ -344,9 +240,6 @@ try {
     }, palette.colors);
     await page.screenshot({ path: `artifacts/native-companion/${theme}.png` });
   }
-  await page.evaluate(() => {
-    document.getElementById("pairingSettings").open = true;
-  });
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.evaluate(() =>
     window.host({ type: "voiceControl", action: "start", sessionToken: 0 }),
@@ -365,7 +258,6 @@ try {
 
   await page.locator("#toggleSettings").click();
   await page.locator("#toggleSettings").click();
-  await page.locator("#manageMemory").click();
   assert.equal(await page.locator("#resumePairing").isDisabled(), true);
   assert.ok(
     await page.evaluate(() =>
@@ -389,7 +281,7 @@ try {
 
   assert.ok(
     await page.evaluate(() =>
-      window.messages.some((m) => m.type === "manageMemory"),
+      window.messages.some((m) => m.type === "openSettings"),
     ),
   );
   assert.deepEqual(
@@ -671,12 +563,6 @@ try {
   assert.equal(await page.locator(".research-page").count(), 1);
   assert.match(await page.locator(".research-body").textContent(), /<script>/);
   assert.equal(await page.locator(".research-body script").count(), 0);
-  await page.locator("#showTrace").click();
-  assert.ok(
-    await page.evaluate(() =>
-      window.messages.some((m) => m.type === "showTrace"),
-    ),
-  );
   await page.locator(".research-source").click();
   assert.ok(
     await page.evaluate(() =>
@@ -824,20 +710,6 @@ try {
       .evaluate((el) => el.classList.contains("hidden")),
     false,
   );
-  await page.locator("#followPair").uncheck();
-  assert.ok(
-    await page.evaluate(() =>
-      window.messages.some(
-        (m) => m.type === "followPair" && m.enabled === false,
-      ),
-    ),
-  );
-  await page.locator("#inlineMode").selectOption("off");
-  assert.ok(
-    await page.evaluate(() =>
-      window.messages.some((m) => m.type === "inlineMode" && m.mode === "off"),
-    ),
-  );
   await page.locator("#disconnect").click();
   await page.evaluate(() =>
     window.peers[1].channel.emit({
@@ -900,9 +772,6 @@ try {
   );
   assert.equal(await page.locator("#freshPairing").isEnabled(), true);
   assert.equal(await page.locator("#send").isEnabled(), true);
-  await page.evaluate(() => {
-    document.getElementById("pairingSettings").open = false;
-  });
   await page.setViewportSize({ width: 380, height: 860 });
   await page.screenshot({ path: "artifacts/native-companion/chat.png" });
   await page.locator("#voiceMode").click();

@@ -27,7 +27,7 @@ import {
 } from "./task-policy.js";
 import { AgentRuns, delegationTools } from "./agent-runs.js";
 import { type ResearchAgents } from "./subagents.js";
-import { AgentSettings } from "./agent-settings.js";
+import { AgentSettings, type SettingsSection } from "./agent-settings.js";
 import {
   bufferReferences,
   codeReference,
@@ -165,7 +165,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       })),
     });
   }
-  openAgentSettings(): void {
+  openAgentSettings(section: SettingsSection = "agents"): void {
     this.agentSettings ??= new AgentSettings(
       this.context,
       () => this.configureKeys(),
@@ -184,8 +184,28 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         ...this.codeIndex.tools(),
         ...this.memory.tools("", undefined),
       ],
+      () => {
+        const config = this.configuration();
+        const theme = vscode.workspace
+          .getConfiguration("workbench")
+          .get<string>("colorTheme");
+        return {
+          inlineMode: config.get("inlineSuggestions", "manual"),
+          shareContext: config.get("shareEditorContext", true),
+          followPair: config.get("followPair", true),
+          indexEnabled: config.get("indexEnabled", true),
+          theme:
+            theme === "Zen Light"
+              ? "light"
+              : theme === "Zen Dark"
+                ? "dark"
+                : "custom",
+          indexStatus: this.codeIndex.status,
+          contextFile: this.snapshot()?.file ?? "No shared file",
+        };
+      },
     );
-    this.agentSettings.open();
+    this.agentSettings.open(section);
   }
   private researchBriefs: ResearchBriefs;
   private contextWarmups = new ContextWarmups();
@@ -952,6 +972,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   private post(message: object): void {
     const data = message as Record<string, unknown>;
+    if (["configuration", "indexStatus", "context"].includes(String(data.type)))
+      this.agentSettings?.updateGeneral();
     if (data.type === "liveAppend" && this.conversationMode === "chat") return;
     if (
       [
@@ -1478,6 +1500,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         await this.automation.review(
           typeof message.id === "string" ? message.id : undefined,
         );
+        return;
+      }
+      if (message.type === "openSettings") {
+        this.openAgentSettings("general");
         return;
       }
       if (message.type === "agentSettings") {
@@ -2783,6 +2809,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     ),
     vscode.commands.registerCommand("pairCode.open", () =>
       vscode.commands.executeCommand("pairCode.companion.focus"),
+    ),
+    vscode.commands.registerCommand("pairCode.settings", () =>
+      companion.openAgentSettings("general"),
     ),
     vscode.commands.registerCommand("pairCode.agentSettings", () =>
       companion.openAgentSettings(),

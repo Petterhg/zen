@@ -13,10 +13,160 @@ body {
   line-height: 1.6;
 }
 main {
-  max-width: 860px;
+  min-width: 0;
+  width: 100%;
+  max-width: 1060px;
   margin: 0 auto;
-  padding: 48px 36px 64px;
+  padding: 42px 48px 64px;
 }
+.settings-shell {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  min-height: 100vh;
+}
+.settings-sidebar {
+  padding: 36px 18px;
+  border-right: 1px solid var(--vscode-panel-border, #d7ddcf);
+  background: var(--vscode-sideBar-background, #eeeee6);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.settings-brand {
+  font-size: 23px;
+  letter-spacing: -1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 32px;
+}
+.brand-caption {
+  font-size: 12px;
+  letter-spacing: 0;
+  margin-left: auto;
+  color: var(--vscode-descriptionForeground, #667462);
+}
+.settings-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.settings-sidebar button {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  text-align: left;
+  width: 100%;
+  white-space: normal;
+  padding: 10px 13px;
+}
+.settings-sidebar nav button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-sidebar nav button[aria-pressed="true"] {
+  background: var(--vscode-list-inactiveSelectionBackground, #dfe5d8);
+  font-weight: 500;
+}
+.sidebar-links {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--vscode-panel-border, #d7ddcf);
+  font-size: 12px;
+}
+.sidebar-note {
+  margin-top: auto;
+  padding: 32px 12px 0;
+  font-size: 11px;
+}
+.page-header {
+  margin-bottom: 32px;
+}
+.group-title {
+  margin: 28px 0 12px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #667462);
+}
+.settings-card {
+  border: 1px solid var(--vscode-panel-border, #d7ddcf);
+  border-radius: 10px;
+  padding: 0 18px;
+  background: var(--vscode-sideBar-background, #eeeee6);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--vscode-panel-border, #d7ddcf);
+}
+.setting-row:last-child {
+  border-bottom: 0;
+}
+.setting-row > span {
+  min-width: 0;
+}
+.setting-row strong {
+  display: block;
+  font-weight: 500;
+  color: var(--vscode-foreground, #384438);
+}
+.setting-row small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--vscode-descriptionForeground, #667462);
+}
+.setting-row select {
+  width: 154px;
+  flex-shrink: 0;
+  margin: 0;
+}
+.setting-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+.setting-row button {
+  background: var(--vscode-editor-background, #f5f4ee);
+  color: inherit;
+  border-color: var(--vscode-panel-border, #d7ddcf);
+  padding: 6px 12px;
+}
+.card-note {
+  font-size: 11px;
+  padding-bottom: 12px;
+}
+.index-details {
+  padding: 12px 0;
+}
+.index-details p {
+  margin-top: 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+progress {
+  width: 100%;
+  accent-color: var(--vscode-focusBorder, #61784e);
+}
+.hidden {
+  display: none !important;
+}
+#generalStatus {
+  margin-top: 16px;
+}
+.definition-actions {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
 h1 {
   font-size: 27px;
   font-weight: 500;
@@ -113,6 +263,7 @@ button:disabled {
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 18px;
   margin-top: 24px;
@@ -175,10 +326,11 @@ button:disabled {
   display: none !important;
 }
 fieldset {
+  min-width: 0;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 8px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 8px;
 }
 .tool-row {
@@ -207,4 +359,103 @@ pre {
   overflow-wrap: anywhere;
   max-height: 360px;
   overflow: auto;
+}
+
+@media (max-width: 760px) {
+  .settings-shell {
+    grid-template-columns: 165px minmax(0, 1fr);
+  }
+  .settings-sidebar {
+    padding: 24px 10px;
+  }
+  main {
+    padding: 28px 22px 48px;
+  }
+  .settings-brand {
+    font-size: 21px;
+    padding: 0 8px 24px;
+  }
+  .brand-caption {
+    display: none;
+  }
+  .setting-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .tool-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .tool-row strong {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 520px) {
+  .settings-shell {
+    display: block;
+  }
+  .settings-sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--vscode-panel-border, #d7ddcf);
+    padding: 18px;
+  }
+  .settings-sidebar nav {
+    flex-direction: row;
+  }
+  .settings-sidebar nav button {
+    justify-content: center;
+    padding: 8px;
+  }
+  .settings-brand {
+    padding-bottom: 14px;
+  }
+  .sidebar-note,
+  .sidebar-links {
+    display: none;
+  }
+  main {
+    padding: 24px 18px 40px;
+  }
+  .definition-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  fieldset {
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+}
+
+#toolsPage > h2:not(:first-child) {
+  margin-top: 36px;
+}
+#toolsPage > details {
+  margin: 18px 0;
+}
+#toolsPage > label {
+  margin-top: 20px;
+}
+#toolsPage > .note {
+  margin-bottom: 16px;
+}
+#toolsPage > button {
+  margin-top: 14px;
+}
+.definition-actions button,
+#newTool,
+#deleteTool,
+#revoke,
+#reload,
+#export,
+#import {
+  background: transparent;
+  color: var(--vscode-foreground, #384438);
+  border-color: var(--vscode-panel-border, #d7ddcf);
+}
+#toolsPage .actions {
+  gap: 10px;
 }
