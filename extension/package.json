@@ -243,7 +243,7 @@
           "type": "object",
           "default": {},
           "scope": "application",
-          "description": "User-defined application-local subagents. Edit with Zen: Agent Settings. Version 2 contains a registry with stable IDs; legacy profiles are migrated on save.",
+          "description": "Legacy subagent profiles, migrated once to owner-local Markdown definition files. Use Zen: Agent Settings to edit current agents and tools.",
           "additionalProperties": true
         }
       }

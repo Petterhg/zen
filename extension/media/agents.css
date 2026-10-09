@@ -170,3 +170,41 @@ button:disabled {
 .profile > summary {
   list-style: none;
 }
+
+[hidden] {
+  display: none !important;
+}
+fieldset {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.tool-row strong {
+  min-width: 220px;
+  font-weight: 400;
+}
+.tool-row label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+#toolDefinition {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+}

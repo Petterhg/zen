@@ -12,7 +12,7 @@
     <main>
       <header>
         <span class="eyebrow">YOUR PAIR</span>
-        <h1>Agent settings</h1>
+        <h1>Agents &amp; tools</h1>
         <p>Fast conversation. Deeper work when you need it.</p>
       </header>
       <section class="connection">
@@ -26,6 +26,59 @@
         <button id="keys" type="button">API keys</button>
       </section>
       <p id="keyStatus" class="note" role="status"></p>
+      <nav class="actions">
+        <button id="agentsTab" aria-pressed="true">Agents</button
+        ><button id="toolsTab" aria-pressed="false">Tools</button
+        ><button id="definitions">Definition files</button
+        ><button id="import">Import</button><button id="export">Export</button>
+      </nav>
+      <section id="toolsPage" hidden>
+        <h2>Tool library</h2>
+        <p class="note">
+          Enable tools globally, then assign them to Main or individual agents.
+          Custom commands require a separate local execution grant.
+        </p>
+        <div id="toolAssignments"></div>
+        <details>
+          <summary>Built-in tool contracts (read only)</summary>
+          <select id="builtinSelect" aria-label="Built-in tool"></select>
+          <pre id="builtinContract"></pre>
+        </details>
+        <button id="savePolicy">Save availability &amp; Main tools</button>
+        <h2>Custom command</h2>
+        <select id="toolSelect" aria-label="Custom tool"></select
+        ><button id="newTool">New tool</button>
+        <label
+          >JSON definition<textarea
+            id="toolDefinition"
+            rows="18"
+            spellcheck="false"
+          ></textarea>
+        </label>
+        <div class="actions">
+          <button id="saveTool">Save tool</button
+          ><button id="deleteTool">Delete tool</button
+          ><button id="grant">Allow local execution…</button
+          ><button id="revoke">Revoke execution</button>
+        </div>
+        <p id="grantStatus" class="note"></p>
+        <p class="note">
+          Commands run in a disposable Git worktree with fixed arguments and
+          JSON stdin/stdout. They are NOT sandboxed and can access your
+          account's files and network. Only enable trusted code. Changing a
+          definition requires a new grant.
+        </p>
+        <label
+          >Test input (JSON)<textarea id="testInput" rows="3">
+{}</textarea></label
+        ><button id="testTool">Test saved tool</button>
+        <p class="note">
+          Testing requires Main assignment, assistance above zero and an open
+          Git root. Test changes are discarded. Close this settings tab to
+          cancel.
+        </p>
+        <pre id="testResult"></pre>
+      </section>
       <form id="profiles">
         <div id="agentList"></div>
         <button id="add" type="button">＋ New subagent</button>
@@ -36,10 +89,10 @@
           tasks can run in parallel.
         </p>
         <p class="note">
-          Workers currently use permitted read-only code tools and explicitly
-          requested web research. They return findings to the main agent for any
-          inline edits. Instructions do not grant shell, writes, integrations or
-          recursive delegation.
+          Assign each worker its tools below. Implementers use an isolated Git
+          worktree and return changes for review. Commands require explicit
+          local execution approval. Instructions never grant tools. Recursive
+          worker delegation is not yet supported.
         </p>
         <p class="note">
           Off disables thinking. Other reasoning levels guide depth through
@@ -49,9 +102,9 @@
         <div class="actions">
           <button id="save" type="submit" disabled>Save changes</button
           ><button id="reload" type="button">Reload saved</button>
-          <p id="status" role="status" aria-live="polite"></p>
         </div>
       </form>
+      <p id="status" role="status" aria-live="polite"></p>
     </main>
     <script nonce="{{nonce}}" src="{{js}}"></script>
   </body>

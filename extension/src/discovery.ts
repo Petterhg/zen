@@ -130,6 +130,27 @@ export class WorkspaceDiscovery {
     }
     throw new Error("This path is excluded by Git ignore rules.");
   }
+  /** Apply the same ignore policy to a new file, validating every existing ancestor. */
+  async permitTarget(file: string, signal: AbortSignal): Promise<void> {
+    const root = this.roots.find((r) => this.within(r.path, file));
+    if (!root) throw new Error("Target is outside the workspace.");
+    const base = await realpath(root.path);
+    let current = file;
+    while (true) {
+      try {
+        const canonical = await realpath(current);
+        if (!this.within(base, canonical))
+          throw new Error("Target escapes workspace.");
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        const parent = path.dirname(current);
+        if (parent === current) throw error;
+        current = parent;
+      }
+    }
+    await this.permitted(root, file, false, signal);
+  }
   async resolve(
     value: string,
     signal: AbortSignal,

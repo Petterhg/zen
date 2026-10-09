@@ -877,6 +877,16 @@
   window.addEventListener("beforeunload", stop);
   post({ type: "ready" });
 
+  $("reviewChanges").addEventListener("click", () =>
+    post({ type: "reviewChanges" }),
+  );
+  window.addEventListener("message", ({ data }) => {
+    if (data.type === "changeSets") {
+      const pending = data.changes.filter((c) => c.status === "pending");
+      $("reviewChanges").classList.toggle("hidden", !pending.length);
+      $("reviewChanges").textContent = `Review changes · ${pending.length}`;
+    }
+  });
   let workerRuns = [],
     workerDetail,
     selectedRun,
@@ -885,6 +895,7 @@
     const run = workerDetail?.id === selectedRun ? workerDetail : undefined;
     $("workerInspector").classList.toggle("hidden", !run);
     if (!run) return;
+    $("workerReview").classList.toggle("hidden", !run.changes);
     $("workerTitle").textContent = run.agent.name;
     $("workerMeta").textContent =
       `${run.state} · ${run.mode} · ${run.agent.model} · ${run.agent.reasoningEffort}\n${run.id}`;
@@ -918,6 +929,10 @@
   $("workerSettings").addEventListener("click", () =>
     post({ type: "agentSettings" }),
   );
+  $("workerReview").addEventListener("click", () => {
+    if (workerDetail?.changes)
+      post({ type: "reviewChanges", id: workerDetail.changes });
+  });
   $("workerStop").addEventListener("click", () => {
     if (selectedRun) post({ type: "stopAgentRun", id: selectedRun });
   });

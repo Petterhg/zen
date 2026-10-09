@@ -43,6 +43,8 @@ try {
       description: "Discovery",
       mode: "foreground",
       orientation: true,
+      tools: ["read_file"],
+      workspace: "shared",
       enabled: true,
       model: "deepseek-ai/DeepSeek-V4.1-Flash",
       reasoningEffort: "medium",
@@ -53,6 +55,8 @@ try {
       description: "Complex questions",
       mode: "background",
       orientation: false,
+      tools: ["read_file"],
+      workspace: "shared",
       enabled: true,
       model: "deepseek-ai/DeepSeek-V4-Pro-0813",
       reasoningEffort: "high",
@@ -66,7 +70,16 @@ try {
   ];
   await page.evaluate(
     (data) => window.dispatchEvent(new MessageEvent("message", { data })),
-    { type: "settings", agents, models, togetherReady: true },
+    {
+      type: "settings",
+      agents,
+      models,
+      togetherReady: true,
+      builtin: ["read_file", "apply_patch"],
+      tools: {},
+      policy: { mainTools: ["read_file"], disabled: [] },
+      revision: "fixture",
+    },
   );
   assert.equal(await page.locator("#explorer-model").inputValue(), models[0]);
   assert.equal(
@@ -124,10 +137,46 @@ try {
   assert.equal(Object.values(created.agents).at(-1).mode, "background");
   await custom.getByRole("button", { name: "Delete", exact: true }).click();
   assert.equal(await page.locator(".profile").count(), 2);
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new MessageEvent("message", { data: { type: "saved", text: "Saved." } }),
+    ),
+  );
+  await page.locator("#explorer-tool-read_file").check();
+  await page.locator("#explorer-workspace").selectOption("isolated-worktree");
+  await page.locator("#explorer-tool-apply_patch").check();
+  await page.locator("#save").click();
+  assert.deepEqual(
+    (await page.evaluate(() => window.messages.at(-1))).agents.explorer.tools,
+    ["read_file", "apply_patch"],
+  );
+  await page.locator("#toolsTab").click();
+  assert.equal(await page.locator("#profiles").isVisible(), false);
+  await page.locator("#main-apply_patch").check();
+  await page.locator("#savePolicy").click();
+  assert.deepEqual(
+    (await page.evaluate(() => window.messages.at(-1))).mainTools,
+    ["read_file", "apply_patch"],
+  );
+  await page.locator("#newTool").click();
+  await page.locator("#saveTool").click();
+  const toolSave = await page.evaluate(() => window.messages.at(-1));
+  assert.equal(toolSave.type, "saveTool");
+  assert.equal(JSON.parse(toolSave.definition).runtime.protocol, "json-stdio");
+  await page.locator("#agentsTab").click();
   // Visual checks use actual page/assets at both desktop and narrow widths.
   await page.evaluate(
     (data) => window.dispatchEvent(new MessageEvent("message", { data })),
-    { type: "settings", agents, models, togetherReady: true },
+    {
+      type: "settings",
+      agents,
+      models,
+      togetherReady: true,
+      builtin: ["read_file", "apply_patch"],
+      tools: {},
+      policy: { mainTools: ["read_file"], disabled: [] },
+      revision: "fixture",
+    },
   );
   await page.evaluate(() => {
     document.getElementById("status").textContent = "";

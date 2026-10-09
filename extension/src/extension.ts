@@ -1,3 +1,5 @@
+import { Definitions } from "./definitions.js";
+import { Automation, type WorkerEnvironment } from "./automation.js";
 import { PersonalMemory } from "./memory-service.js";
 import { IndexService } from "./index-service.js";
 import { configurationRequiresCancellation } from "./settings-policy.js";
@@ -24,11 +26,7 @@ import {
   type Effort,
 } from "./task-policy.js";
 import { AgentRuns, delegationTools } from "./agent-runs.js";
-import {
-  researchAgents,
-  agentRegistry,
-  type ResearchAgents,
-} from "./subagents.js";
+import { type ResearchAgents } from "./subagents.js";
 import { AgentSettings } from "./agent-settings.js";
 import {
   bufferReferences,
@@ -120,6 +118,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private recentFiles: string[] = [];
   private research: ResearchArticle[] = [];
   private agentSettings?: AgentSettings;
+  private automation: Automation;
   private inspectedRun?: string;
   private agentRuns = new AgentRuns(
     () => this.publishRuns(),
@@ -145,6 +144,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   );
   private publishRuns(): void {
     this.post({ type: "agentRuns", runs: this.agentRuns.list() });
+    this.post({
+      type: "changeSets",
+      changes: this.automation?.summaries() ?? [],
+    });
     if (this.inspectedRun)
       this.post({
         type: "agentRunDetail",
@@ -167,6 +170,20 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       this.context,
       () => this.configureKeys(),
       () => this.key("together"),
+      this.definitions,
+      this.automation,
+      () => {
+        this.publishAgents();
+        this.resetWorkingContext();
+      },
+      () => [
+        ...workspaceTools(
+          () => this.configuration().get("shareEditorContext", true),
+          undefined,
+        ),
+        ...this.codeIndex.tools(),
+        ...this.memory.tools("", undefined),
+      ],
     );
     this.agentSettings.open();
   }
@@ -189,10 +206,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.post({ type: "contextStatus", state: "idle" });
   }
   private agents(): ResearchAgents {
-    // Application settings only; a repository cannot supply agent instructions.
-    return researchAgents(
-      this.configuration().inspect("subagents")?.globalValue,
-    );
+    return structuredClone(this.definitions.agents);
   }
   private orientationKey(scope: string): string {
     const agent = Object.values(this.agents()).find(
@@ -206,14 +220,35 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     tools: BackendTool[],
     map?: ServiceMap,
   ): Promise<string> {
+    await this.definitions.reload();
     const scope = this.contextScope(context.file),
       key = this.orientationKey(scope);
     const token = this.sessionToken,
       workspace = this.researchWorkspaceSignature();
-    const agent = Object.values(this.agents()).find(
-      (a) => a.enabled && a.orientation,
+    const selected = Object.entries(this.agents()).find(
+      ([, a]) => a.enabled && a.orientation,
     );
-    if (!agent) return key;
+    if (!selected) return key;
+    const [agentId, agent] = selected;
+    const allowed = (name: string) =>
+      this.definitions.agents[agentId]?.enabled &&
+      this.definitions.agents[agentId]?.tools.includes(name) &&
+      this.definitions.enabled(name);
+    tools = tools
+      .filter((t) => agent.tools.includes(t.name))
+      .map((tool) => ({
+        ...tool,
+        execute: async (args, signal) => {
+          await this.definitions.reload();
+          if (!allowed(tool.name))
+            throw new Error("Orientation tool access was revoked.");
+          const result = await tool.execute(args, signal);
+          await this.definitions.reload();
+          if (!allowed(tool.name))
+            throw new Error("Orientation tool access was revoked.");
+          return result;
+        },
+      }));
     const provider = "together" as const;
     const model = agent.model;
     const startedAt = Date.now(),
@@ -246,7 +281,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           return;
         }
         const seed = await orientationSeed(
-          tools,
+          tools.filter(
+            (t) =>
+              agent.tools.includes(t.name) && this.definitions.enabled(t.name),
+          ),
           context.file,
           scope,
           question,
@@ -538,7 +576,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     }
   }
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private definitions: Definitions,
+  ) {
+    this.automation = new Automation(
+      definitions,
+      vscode.Uri.joinPath(context.globalStorageUri, "task-worktrees").fsPath,
+      () =>
+        vscode.workspace.isTrusted &&
+        this.configuration().get("shareEditorContext", true),
+      () => this.assistance(),
+      () => this.publishRuns(),
+    );
     this.researchBriefs = new ResearchBriefs(context.globalState);
     if (!this.configuration().get("shareEditorContext", true))
       this.researchBriefs.clear();
@@ -578,6 +628,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       ) {
         this.researchBriefs.clear();
         this.agentRuns.clear();
+        this.automation?.cancel();
         this.resetWorkingContext();
       } else if (this.researchBriefs.invalidate(uri.fsPath))
         this.trace.record({
@@ -736,6 +787,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       this.lensChanges,
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this.agentRuns.clear();
+        this.automation?.cancel();
         this.resetWorkingContext();
       }),
       vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -772,6 +824,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         ) {
           this.researchBriefs.clear();
           this.agentRuns.clear();
+          this.automation?.cancel();
           this.resetWorkingContext();
         } else if (
           event.document.uri.scheme === "file" &&
@@ -1417,10 +1470,13 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         if (!Object.hasOwn(agents, message.id))
           throw new Error("Agent no longer exists.");
         agents[message.id].enabled = message.enabled;
-        await this.configuration().update(
-          "subagents",
-          agentRegistry(agents),
-          vscode.ConfigurationTarget.Global,
+        await this.definitions.saveAgents(agents, this.definitions.revision);
+        this.publishAgents();
+        return;
+      }
+      if (message.type === "reviewChanges") {
+        await this.automation.review(
+          typeof message.id === "string" ? message.id : undefined,
         );
         return;
       }
@@ -1605,7 +1661,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.activeDelegation = delegationId;
     const provider = "cerebras" as const;
     this.post({ type: "backendStatus", state: "working", provider });
+    let mainEnvironment: WorkerEnvironment | undefined;
     try {
+      await this.definitions.reload();
       const key = await this.key(provider);
       if (!key) throw new Error(`Configure your ${provider} API key first.`);
       // Give fragments already in transit a brief opportunity to arrive; this is not turn detection.
@@ -1728,6 +1786,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           verifyResearch,
         ),
       ];
+      for (let i = 0; i < readTools.length; i++) {
+        const tool = readTools[i];
+        readTools[i] = {
+          ...tool,
+          volatile: true,
+          execute: async (args, signal) => {
+            await this.definitions.reload();
+            if (!this.definitions.enabled(tool.name))
+              throw new Error("Tool is globally disabled.");
+            return tool.execute(args, signal);
+          },
+        };
+      }
       if (webResearchForbidden(latestHuman))
         for (let i = readTools.length - 1; i >= 0; i--)
           if (["web_search", "fetch_page"].includes(readTools[i].name))
@@ -1895,6 +1966,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       const memoryReference = memoryResult.value,
         effort = effortResult.value;
       const workers = delegationTools(this.agentRuns, {
+        prepare: (id, profile, pool, signal, scope) =>
+          this.automation.prepare(id, profile, pool, signal, scope),
         agents: () => this.agents(),
         key: () => this.key("together"),
         allowWeb:
@@ -1906,7 +1979,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         model: DEFAULT_MODELS.cerebras,
         apiKey: key,
         context,
-        tools: readTools,
+        tools: [...readTools, ...this.memory.tools(latestHuman, memoryScope)],
+        assistanceLevel: assistance,
         timeoutMs:
           this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
       });
@@ -1916,32 +1990,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         elapsedMs: Date.now() - receivedAt,
         quick,
       });
-      let result = await requestBackend({
-        notifications: () => this.agentRuns.drain(),
-        conversationMode: this.conversationMode,
-        responseStyle: quick ? "brief" : undefined,
-        provider,
-        model: DEFAULT_MODELS.cerebras,
-        apiKey: key,
-        history,
-        context,
-        signal: controller.signal,
-        effort,
-        timeoutMs:
-          this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
-        taskState: {
-          personalMemory: memoryReference,
-          previousPairing: await this.resumeReference(memoryScope),
-          researchReference: compactResearchContext(researchReference),
-          workingContext,
-          workers: this.agentRuns.summaries(),
-          lastEditEvent: this.lastEditEvent,
-          pendingPreview: this.proposal
-            ? { file: this.proposal.uri, version: this.proposal.version }
-            : null,
-        },
-        assistanceLevel: assistance,
-        tools: [
+      mainEnvironment = await this.automation.prepare(
+        "main",
+        undefined,
+        [
           ...readTools,
           ...this.memory.tools(latestHuman, memoryScope),
           ...workers,
@@ -2024,6 +2076,40 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
               ]
             : []),
         ],
+        controller.signal,
+        context?.file,
+      );
+      let result = await requestBackend({
+        notifications: () => this.agentRuns.drain(),
+        conversationMode: this.conversationMode,
+        responseStyle: quick ? "brief" : undefined,
+        provider,
+        model: DEFAULT_MODELS.cerebras,
+        apiKey: key,
+        history,
+        context,
+        signal: controller.signal,
+        effort,
+        timeoutMs:
+          this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
+        taskState: {
+          personalMemory: memoryReference,
+          previousPairing: await this.resumeReference(memoryScope),
+          researchReference: compactResearchContext(researchReference),
+          workingContext,
+          workers: this.agentRuns.summaries(),
+          implementation: mainEnvironment.tools.some(
+            (t) => t.name === "apply_patch",
+          )
+            ? "Use apply_patch in your isolated checkout for implementation. Read files through task tools. Return edits: [] once task tools have prepared changes; human review applies them to the real editor. Do not propose the same changes again as a single-file edit."
+            : undefined,
+          lastEditEvent: this.lastEditEvent,
+          pendingPreview: this.proposal
+            ? { file: this.proposal.uri, version: this.proposal.version }
+            : null,
+        },
+        assistanceLevel: assistance,
+        tools: mainEnvironment.tools,
         onResearch: (article) => {
           if (revision !== this.jobRevision || controller.signal.aborted)
             return;
@@ -2053,6 +2139,15 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           // repetitive spoken reassurance even through thinking.append.
         },
       });
+      const proposedChanges = await mainEnvironment.finish();
+      if (proposedChanges)
+        result = {
+          ...result,
+          edits: [],
+          summary:
+            result.summary +
+            "\nChanges are ready in Review changes; they have not been applied.",
+        };
       if (
         controller.signal.aborted ||
         revision !== this.jobRevision ||
@@ -2221,6 +2316,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           mode: "commentary",
         });
     } finally {
+      await mainEnvironment?.dispose();
       if (revision === this.jobRevision) {
         this.backendRunning = false;
         this.activeDelegation = undefined;
@@ -2328,6 +2424,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   cancel(): void {
     this.agentRuns.clear();
+    this.automation?.cancel();
     this.resetWorkingContext();
     if (this.backendRunning)
       this.post({
@@ -2594,6 +2691,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.inlineJob?.abort();
     this.sessionJob?.abort();
     this.agentSettings?.dispose();
+    this.automation.dispose();
     this.disposables.forEach((disposable) => disposable.dispose());
   }
 }
@@ -2601,7 +2699,20 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
 export async function activate(context: vscode.ExtensionContext): Promise<{
   previewEdit: (result: BackendResult) => Promise<void>;
 }> {
-  const companion = new Companion(context);
+  const definitions = new Definitions(
+    vscode.Uri.joinPath(context.globalStorageUri, "definitions").fsPath,
+  );
+  try {
+    await definitions.initialize(
+      vscode.workspace.getConfiguration("pairCode").inspect("subagents")
+        ?.globalValue,
+    );
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `Agent definitions need attention: ${error instanceof Error ? error.message : "Invalid definitions"}`,
+    );
+  }
+  const companion = new Companion(context, definitions);
   await vscode.commands.executeCommand(
     "setContext",
     "zen.available",
