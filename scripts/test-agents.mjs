@@ -283,9 +283,30 @@ try {
       agents,
       models,
       togetherReady: true,
-      builtin: ["read_file", "apply_patch"],
+      builtin: [
+        "read_file",
+        "apply_patch",
+        "working_context",
+        "remember_pairing_context",
+      ],
+      coreTools: ["working_context", "remember_pairing_context"],
+      toolPresentation: {
+        read_file: {
+          title: "Read a file",
+          description: "Read permitted project source.",
+          group: "Code & project",
+        },
+        apply_patch: {
+          title: "Propose file changes",
+          description: "Edit an isolated checkout for review.",
+          group: "Implementation",
+        },
+      },
       tools: {},
-      policy: { mainTools: ["read_file"], disabled: [] },
+      policy: {
+        mainTools: ["read_file", "working_context"],
+        disabled: ["remember_pairing_context"],
+      },
       revision: "fixture",
     },
   );
@@ -370,7 +391,20 @@ try {
   await page.locator("#savePolicy").click();
   assert.deepEqual(
     (await page.evaluate(() => window.messages.at(-1))).mainTools,
-    ["read_file", "apply_patch"],
+    ["working_context", "read_file", "apply_patch"],
+  );
+  assert.deepEqual(
+    (await page.evaluate(() => window.messages.at(-1))).disabled,
+    ["remember_pairing_context"],
+  );
+  assert.equal(await page.locator("#main-working_context").count(), 0);
+  assert.equal(
+    await page.locator("#explorer-tool-remember_pairing_context").count(),
+    0,
+  );
+  assert.match(
+    await page.locator("#toolAssignments").textContent(),
+    /Read permitted project source/,
   );
   await page.locator("#newTool").click();
   await page.locator("#saveTool").click();
@@ -399,9 +433,30 @@ try {
       agents,
       models,
       togetherReady: true,
-      builtin: ["read_file", "apply_patch"],
+      builtin: [
+        "read_file",
+        "apply_patch",
+        "working_context",
+        "remember_pairing_context",
+      ],
+      coreTools: ["working_context", "remember_pairing_context"],
+      toolPresentation: {
+        read_file: {
+          title: "Read a file",
+          description: "Read permitted project source.",
+          group: "Code & project",
+        },
+        apply_patch: {
+          title: "Propose file changes",
+          description: "Edit an isolated checkout for review.",
+          group: "Implementation",
+        },
+      },
       tools: {},
-      policy: { mainTools: ["read_file"], disabled: [] },
+      policy: {
+        mainTools: ["read_file", "working_context"],
+        disabled: ["remember_pairing_context"],
+      },
       revision: "fixture",
     },
   );

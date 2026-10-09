@@ -5,6 +5,7 @@ import { assistanceViolation } from "./assistance.js";
 import { Definitions } from "./definitions.js";
 import { TaskWorkspace, textFile, type ChangeSet } from "./task-workspace.js";
 import {
+  CORE_TOOLS,
   executeCommand,
   gatedTool,
   toolRevision,
@@ -87,6 +88,7 @@ export class Automation implements vscode.Disposable {
       profile?.tools ?? this.definitions.policy.mainTools
     ).filter(
       (name) =>
+        (id === "main" || !CORE_TOOLS.includes(name)) &&
         this.definitions.enabled(name) &&
         (id !== "main" ||
           this.assistance() > 0 ||

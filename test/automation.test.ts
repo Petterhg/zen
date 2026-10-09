@@ -8,6 +8,11 @@ import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { build } from "esbuild";
 import { Definitions } from "../extension/src/definitions.js";
+import {
+  CORE_TOOLS,
+  BUILTIN_TOOLS,
+  TOOL_PRESENTATION,
+} from "../extension/src/tool-registry.js";
 import { DEFAULT_AGENTS } from "../extension/src/subagents.js";
 import type { Automation } from "../extension/src/automation.js";
 import type { ChangeSet } from "../extension/src/task-workspace.js";
@@ -129,6 +134,54 @@ test("host assignments, revocation, guidance-only mode and stale multi-file acce
       { ...defs.policy, mainTools: ["read_file", "apply_patch"] },
       defs.revision,
     );
+    const corePool = CORE_TOOLS.map((name) => ({
+      name,
+      description: "fixture",
+      parameters: { type: "object", properties: {} },
+      execute: async () => ({ ok: true }),
+    }));
+    const shared = {
+      ...DEFAULT_AGENTS.explorer,
+      tools: CORE_TOOLS,
+      orientation: false,
+    };
+    await defs.saveAgents({ implementer: profile, shared }, defs.revision);
+    const restricted = await automation.prepare(
+      "shared",
+      shared,
+      corePool,
+      new AbortController().signal,
+    );
+    assert.deepEqual(
+      restricted.tools,
+      [],
+      "workers cannot inherit private/session tools even from hand-edited definitions",
+    );
+    await restricted.dispose();
+    await defs.savePolicy(
+      { ...defs.policy, mainTools: [...CORE_TOOLS] },
+      defs.revision,
+    );
+    const foreground = await automation.prepare(
+      "main",
+      undefined,
+      corePool,
+      new AbortController().signal,
+    );
+    assert.deepEqual(
+      foreground.tools.map((t) => t.name),
+      CORE_TOOLS,
+    );
+    await foreground.dispose();
+    await defs.savePolicy(
+      { ...defs.policy, mainTools: ["read_file", "apply_patch"] },
+      defs.revision,
+    );
+    for (const name of BUILTIN_TOOLS.filter((n) => !CORE_TOOLS.includes(n)))
+      assert.ok(
+        TOOL_PRESENTATION[name]?.description,
+        `${name} has a human-readable description`,
+      );
     level = 0;
     const main = await automation.prepare(
       "main",

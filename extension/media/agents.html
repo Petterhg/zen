@@ -11,34 +11,29 @@
   <body>
     <div class="settings-shell">
       <aside class="settings-sidebar" aria-label="Settings navigation">
-        <div class="settings-brand">
-          <span aria-hidden="true">◯</span> zen
-          <span class="brand-caption">Settings</span>
-        </div>
+        <div class="settings-brand">Settings</div>
         <nav aria-label="Settings sections">
           <button
             id="generalTab"
             aria-pressed="true"
             aria-controls="generalPage"
           >
-            <span aria-hidden="true">⚙</span> General
+            General
           </button>
           <button id="agentsTab" aria-pressed="false" aria-controls="profiles">
-            <span aria-hidden="true">◇</span> Agents
+            Agents
           </button>
           <button id="toolsTab" aria-pressed="false" aria-controls="toolsPage">
-            <span aria-hidden="true">⌘</span> Tools
+            Tools
           </button>
         </nav>
         <div class="sidebar-links">
           <button id="editorSettings">Editor settings ↗</button
           ><button id="keyboardSettings">Keyboard shortcuts ↗</button>
         </div>
-        <p class="sidebar-note">A quieter place to make Zen yours.</p>
       </aside>
       <main>
         <header class="page-header">
-          <span class="eyebrow">ZEN SETTINGS</span>
           <h1 id="pageTitle">General</h1>
           <p id="pageDescription">Your editor, your way of working.</p>
         </header>
@@ -169,8 +164,14 @@
         <section id="toolsPage" hidden>
           <h2>Tool library</h2>
           <p class="note">
-            Enable tools globally, then assign them to Main or individual
-            agents. Custom commands require a separate local execution grant.
+            Enabled tools can be assigned to workers in Agents. “Use in
+            conversation” lets your pairing assistant use that tool directly.
+            Turning off Enabled blocks it for everyone.
+          </p>
+          <p class="core-note">
+            Conversation context, code pointing, personal memory and worker
+            coordination are built into your pair. They are not worker tools.
+            Privacy controls still apply.
           </p>
           <div id="toolAssignments"></div>
           <details>
@@ -178,7 +179,7 @@
             <select id="builtinSelect" aria-label="Built-in tool"></select>
             <pre id="builtinContract"></pre>
           </details>
-          <button id="savePolicy">Save availability &amp; Main tools</button>
+          <button id="savePolicy">Save tool access</button>
           <h2>Custom command</h2>
           <select id="toolSelect" aria-label="Custom tool"></select
           ><button id="newTool">New tool</button>
@@ -207,9 +208,9 @@
 {}</textarea></label
           ><button id="testTool">Test saved tool</button>
           <p class="note">
-            Testing requires Main assignment, assistance above zero and an open
-            Git root. Test changes are discarded. Close this settings tab to
-            cancel.
+            Testing requires “Use in conversation”, assistance above zero and an
+            open Git root. Test changes are discarded. Close this settings tab
+            to cancel.
           </p>
           <pre id="testResult"></pre>
         </section>

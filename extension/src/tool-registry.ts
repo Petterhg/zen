@@ -29,6 +29,104 @@ export const BUILTIN_TOOLS = [
   "agent_run",
   "apply_patch",
 ];
+/** Session orchestration and personal context belong only to the foreground pair. */
+export const CORE_TOOLS = [
+  "working_context",
+  "code_focus",
+  "recall_pairing_context",
+  "remember_pairing_context",
+  "delegate_to_agents",
+  "agent_run",
+];
+export const TOOL_PRESENTATION: Record<
+  string,
+  { title: string; description: string; group: string }
+> = {
+  read_file: {
+    title: "Read a file",
+    description:
+      "Read a selected part of a file, including current unsaved edits.",
+    group: "Code & project",
+  },
+  read_files: {
+    title: "Read several files",
+    description: "Read related files together to understand how they work.",
+    group: "Code & project",
+  },
+  find_files: {
+    title: "Find files",
+    description: "Locate files by name or path within the project.",
+    group: "Code & project",
+  },
+  search_text: {
+    title: "Search text",
+    description: "Find exact text or patterns in permitted project files.",
+    group: "Code & project",
+  },
+  workspace_overview: {
+    title: "Explore project structure",
+    description: "Discover folders, services and project entry points.",
+    group: "Code & project",
+  },
+  search_code: {
+    title: "Search code by meaning",
+    description:
+      "Find relevant code using the local lexical and semantic index.",
+    group: "Code & project",
+  },
+  index_status: {
+    title: "Check search coverage",
+    description:
+      "Check which files are indexed and whether embeddings are pending.",
+    group: "Code & project",
+  },
+  symbol_usages: {
+    title: "Find references",
+    description:
+      "Ask language tools for definitions and references to a symbol. Coverage depends on the language service.",
+    group: "Code & project",
+  },
+  diagnostics: {
+    title: "Read problems",
+    description: "Read errors and warnings reported by editor language tools.",
+    group: "Code & project",
+  },
+  git_diff: {
+    title: "Inspect changes",
+    description: "Read the current Git diff to understand work in progress.",
+    group: "Code & project",
+  },
+  research_briefs: {
+    title: "Read research notes",
+    description:
+      "Reuse compact, source-backed findings from earlier project exploration.",
+    group: "Code & project",
+  },
+  service_context: {
+    title: "Understand a service",
+    description:
+      "Retrieve a scoped service summary and evidence about its structure.",
+    group: "Code & project",
+  },
+  web_search: {
+    title: "Search the web",
+    description:
+      "Find external documentation through Firecrawl. Requires a configured key; local-only requests prohibit it.",
+    group: "Web research",
+  },
+  fetch_page: {
+    title: "Read a web page",
+    description:
+      "Fetch page content through Firecrawl for documentation research.",
+    group: "Web research",
+  },
+  apply_patch: {
+    title: "Propose file changes",
+    description:
+      "Edit an isolated Git worktree and return changes for your review. Requires assisted mode; never overwrites the working editor directly.",
+    group: "Implementation",
+  },
+};
 export const DEFAULT_MAIN_TOOLS = BUILTIN_TOOLS.filter(
   (name) => name !== "apply_patch",
 );

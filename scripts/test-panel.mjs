@@ -856,14 +856,26 @@ try {
     /client.ts:4/,
   );
   assert.equal(await page.locator("#workerStop").isVisible(), false);
+  const beforeMenu = await page.locator("#workerEmpty").boundingBox();
   await page.locator("#workerMenu summary").click();
+  assert.deepEqual(
+    await page.locator("#workerEmpty").boundingBox(),
+    beforeMenu,
+    "popover does not move panel content",
+  );
+  assert.equal(await page.locator("#workerChoices small").count(), 1);
+  await page.screenshot({ path: "artifacts/worker-menu.png", fullPage: true });
   await page.locator("#workerChoices input").uncheck();
   assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {
     type: "toggleAgent",
     id: "critic",
     enabled: false,
   });
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".worker-popover").isVisible(), false);
   await page.locator("#workerMenu summary").click();
+  await page.locator("#workerTitle").click();
+  assert.equal(await page.locator(".worker-popover").isVisible(), false);
   await page.screenshot({
     path: "artifacts/panel-subagents.png",
     fullPage: true,

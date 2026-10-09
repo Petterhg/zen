@@ -10,7 +10,34 @@
     policy = {},
     grants = [],
     contracts = [];
+  let coreTools = [],
+    toolPresentation = {};
   const assignmentCards = new Map();
+  function toolInfo(name) {
+    return (
+      toolPresentation[name] ?? {
+        title: name.replaceAll("_", " "),
+        description:
+          toolDefinitions[name]?.description ??
+          contracts.find((t) => t.name === name)?.description ??
+          "No description supplied.",
+        group: "Custom tools",
+      }
+    );
+  }
+  function toolLabel(name) {
+    const info = toolInfo(name),
+      label = document.createElement("span"),
+      title = document.createElement("strong"),
+      description = document.createElement("small");
+    title.textContent = info.title;
+    description.textContent = info.description;
+    label.className = "tool-description";
+    label.title = name;
+    label.append(title, description);
+    return label;
+  }
+
   function field(id, label, kind, value, choices) {
     const wrapper = document.createElement("label");
     wrapper.textContent = label;
@@ -115,21 +142,16 @@
     legend.textContent = "Assigned tools";
     tools.append(legend);
     fields.tools = [];
-    for (const name of catalog.filter(
-      (n) =>
-        ![
-          "delegate_to_agents",
-          "agent_run",
-          "code_focus",
-          "working_context",
-        ].includes(n),
-    )) {
+    for (const name of catalog.filter((n) => !coreTools.includes(n))) {
       const item = field(
         id + "-tool-" + name,
-        name,
+        "",
         "checkbox",
         agent.tools?.includes(name),
       );
+      item.input.setAttribute("aria-label", toolInfo(name).title);
+      item.wrapper.className = "agent-tool";
+      item.wrapper.append(toolLabel(name));
       fields.tools.push({ name, input: item.input });
       tools.append(item.wrapper);
     }
@@ -191,7 +213,7 @@
   });
   function renderTools() {
     $("builtinSelect").replaceChildren();
-    for (const tool of contracts) {
+    for (const tool of contracts.filter((t) => !coreTools.includes(t.name))) {
       const option = document.createElement("option");
       option.value = tool.name;
       option.textContent = tool.name;
@@ -207,24 +229,39 @@
     showContract();
     assignmentCards.clear();
     $("toolAssignments").replaceChildren();
-    for (const name of catalog) {
+    let group;
+    for (const name of catalog.filter((n) => !coreTools.includes(n))) {
+      const info = toolInfo(name);
+      if (group !== info.group) {
+        group = info.group;
+        const heading = document.createElement("h3");
+        heading.textContent = group;
+        $("toolAssignments").append(heading);
+      }
       const row = document.createElement("div");
       row.className = "tool-row";
-      const label = document.createElement("strong");
-      label.textContent = name;
+      const label = toolLabel(name);
       const enabled = field(
           "enabled-" + name,
-          "Available",
+          "Enabled",
           "checkbox",
           !policy.disabled?.includes(name),
         ),
         main = field(
           "main-" + name,
-          "Main",
+          "Use in conversation",
           "checkbox",
           policy.mainTools?.includes(name),
         );
-      row.append(label, enabled.wrapper, main.wrapper);
+      enabled.input.setAttribute("aria-label", `Enable ${info.title}`);
+      main.input.setAttribute(
+        "aria-label",
+        `Use ${info.title} in conversation`,
+      );
+      const controls = document.createElement("div");
+      controls.className = "tool-controls";
+      controls.append(enabled.wrapper, main.wrapper);
+      row.append(label, controls);
       $("toolAssignments").append(row);
       assignmentCards.set(name, { enabled: enabled.input, main: main.input });
     }
@@ -277,6 +314,7 @@
     $("pageTitle").textContent = sections[section].title;
     $("pageDescription").textContent = sections[section].description;
     $("definitionActions").hidden = section === "general";
+    window.scrollTo(0, 0);
   }
   for (const section of Object.keys(sections))
     $(section + "Tab").onclick = () => navigate(section);
@@ -338,12 +376,18 @@
     $(type).onclick = () => send(type, { name: $("toolSelect").value });
   $("savePolicy").onclick = () =>
     send("savePolicy", {
-      disabled: [...assignmentCards]
-        .filter(([, v]) => !v.enabled.checked)
-        .map(([k]) => k),
-      mainTools: [...assignmentCards]
-        .filter(([, v]) => v.main.checked)
-        .map(([k]) => k),
+      disabled: [
+        ...(policy.disabled ?? []).filter((n) => !assignmentCards.has(n)),
+        ...[...assignmentCards]
+          .filter(([, v]) => !v.enabled.checked)
+          .map(([k]) => k),
+      ],
+      mainTools: [
+        ...(policy.mainTools ?? []).filter((n) => !assignmentCards.has(n)),
+        ...[...assignmentCards]
+          .filter(([, v]) => v.main.checked)
+          .map(([k]) => k),
+      ],
     });
   $("testTool").onclick = () => {
     $("testResult").textContent = "Running…";
@@ -454,6 +498,8 @@
         : "Add a Together API key for workers. Pairing remains on Cerebras.";
       if (data.agents) {
         models = data.models;
+        coreTools = data.coreTools ?? [];
+        toolPresentation = data.toolPresentation ?? {};
         catalog = [...(data.builtin ?? []), ...Object.keys(data.tools ?? {})];
         toolDefinitions = data.tools ?? {};
         policy = data.policy ?? {};

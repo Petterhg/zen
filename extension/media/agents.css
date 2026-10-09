@@ -459,3 +459,141 @@ pre {
 #toolsPage .actions {
   gap: 10px;
 }
+
+/* Compact navigation and descriptive capability rows. */
+.settings-shell {
+  grid-template-columns: 170px minmax(0, 1fr);
+}
+.settings-sidebar {
+  padding: 26px 12px;
+  background: transparent;
+}
+.settings-brand {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 0 12px 20px;
+}
+.settings-sidebar button {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.settings-sidebar nav {
+  gap: 3px;
+}
+.settings-sidebar nav button[aria-pressed="true"] {
+  box-shadow: inset 2px 0 var(--vscode-focusBorder, #61784e);
+  border-radius: 3px;
+}
+.sidebar-links {
+  margin-top: 18px;
+  padding-top: 14px;
+}
+.sidebar-links button {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+main {
+  padding: 28px 32px 48px;
+}
+.page-header {
+  margin-bottom: 24px;
+}
+h1 {
+  font-size: 23px;
+  margin: 0 0 6px;
+}
+.definition-actions {
+  margin: 16px 0 24px;
+  gap: 8px;
+}
+.definition-actions button {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+.core-note {
+  font-size: 12px;
+  margin: 16px 0 24px;
+  line-height: 1.6;
+}
+#toolAssignments h3 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 28px 0 8px;
+  color: var(--vscode-descriptionForeground);
+}
+.tool-row {
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 0;
+  gap: 20px;
+}
+.tool-description {
+  min-width: 0;
+  flex: 1;
+}
+.tool-description strong {
+  display: block;
+  min-width: 0;
+  font-weight: 500;
+  font-size: 13px;
+}
+.tool-description small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+  color: var(--vscode-descriptionForeground);
+  overflow-wrap: anywhere;
+}
+.tool-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 155px;
+}
+.tool-controls label {
+  font-size: 11px;
+}
+.agent-tool {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+}
+.agent-tool input {
+  flex-shrink: 0;
+  margin: 3px 0 0 !important;
+}
+.profile fieldset {
+  display: block;
+  padding: 12px 16px;
+  margin-top: 20px;
+}
+@media (max-width: 760px) {
+  .settings-shell {
+    grid-template-columns: 140px minmax(0, 1fr);
+  }
+  main {
+    padding: 24px 20px;
+  }
+  .tool-row {
+    flex-direction: column;
+  }
+  .tool-controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+}
+@media (max-width: 520px) {
+  .settings-shell {
+    display: block;
+  }
+  .settings-sidebar {
+    padding: 16px;
+  }
+  main {
+    padding: 20px 16px;
+  }
+}

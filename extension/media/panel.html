@@ -99,11 +99,14 @@
           <div class="research-heading">
             <span class="eyebrow">SUBAGENTS</span>
             <details id="workerMenu">
-              <summary>Available workers</summary>
-              <div id="workerChoices"></div>
-              <button id="workerSettings" class="text-button">
-                Edit subagents ↗
-              </button>
+              <summary>Workers <span aria-hidden="true">⌄</span></summary>
+              <div class="worker-popover">
+                <p class="worker-menu-title">Available for delegation</p>
+                <div id="workerChoices"></div>
+                <button id="workerSettings" class="text-button">
+                  Manage agents ↗
+                </button>
+              </div>
             </details>
           </div>
           <p id="workerEmpty" class="quiet-note">

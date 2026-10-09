@@ -824,6 +824,15 @@
         String(button.dataset.tab === workerTab),
       );
   }
+  document.addEventListener("click", (event) => {
+    if (!$("workerMenu").contains(event.target)) $("workerMenu").open = false;
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && $("workerMenu").open) {
+      $("workerMenu").open = false;
+      $("workerMenu").querySelector("summary").focus();
+    }
+  });
   $("workerSettings").addEventListener("click", () =>
     post({ type: "agentSettings" }),
   );
@@ -852,7 +861,12 @@
           input.addEventListener("change", () =>
             post({ type: "toggleAgent", id: agent.id, enabled: input.checked }),
           );
-          name.textContent = agent.name;
+          const title = document.createElement("strong"),
+            description = document.createElement("small");
+          title.textContent = agent.name;
+          description.textContent =
+            agent.description || "No description supplied.";
+          name.append(title, description);
           label.title = agent.description;
           label.append(input, name);
           return label;

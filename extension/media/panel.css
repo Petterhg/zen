@@ -876,24 +876,80 @@ body.chat-mode .workboard-scroll {
 }
 #workerMenu {
   position: relative;
-  font-size: 11px;
+  font-size: 12px;
 }
 #workerMenu summary {
   cursor: pointer;
+  list-style: none;
+  padding: 5px 9px;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground);
 }
-#workerMenu[open] {
-  padding: 8px;
+#workerMenu summary::-webkit-details-marker {
+  display: none;
+}
+#workerMenu summary:hover,
+#workerMenu[open] summary {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+#workerMenu summary span {
+  margin-left: 6px;
+}
+.worker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(290px, calc(100vw - 40px));
+  z-index: 20;
+  padding: 14px;
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-panel-border);
-  border-radius: 5px;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px #0002;
+}
+.worker-menu-title {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin: 0 0 10px;
+}
+#workerChoices {
+  max-height: 280px;
+  overflow: auto;
 }
 #workerChoices label {
   display: flex;
-  gap: 7px;
-  padding: 6px 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+#workerChoices input {
+  margin: 3px 0 0;
+  accent-color: var(--vscode-focusBorder);
 }
 #workerChoices span {
   overflow-wrap: anywhere;
+  min-width: 0;
+}
+#workerChoices strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+#workerChoices small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 3px;
+}
+#workerSettings {
+  border-top: 1px solid var(--vscode-panel-border);
+  margin-top: 10px;
+  padding-top: 12px;
+  width: 100%;
+  text-align: left;
 }
 #workerList {
   max-height: 190px;

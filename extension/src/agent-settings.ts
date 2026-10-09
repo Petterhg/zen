@@ -4,7 +4,13 @@ import {
   agentMarkdown,
 } from "./definitions.js";
 import { Automation } from "./automation.js";
-import { BUILTIN_TOOLS, commandTool, toolRevision } from "./tool-registry.js";
+import {
+  BUILTIN_TOOLS,
+  CORE_TOOLS,
+  TOOL_PRESENTATION,
+  commandTool,
+  toolRevision,
+} from "./tool-registry.js";
 import { readFile, writeFile } from "node:fs/promises";
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
@@ -266,7 +272,7 @@ export class AgentSettings implements vscode.Disposable {
           // Test uses main assignment temporarily only through its captured profile and explicit host gate.
           if (!this.definitions.policy.mainTools.includes(name))
             throw new Error(
-              "Assign this tool to Main and save before testing.",
+              "Enable Use in conversation for this tool and save before testing.",
             );
           const controller = new AbortController();
           const disposal = panel.onDidDispose(() => controller.abort());
@@ -346,6 +352,8 @@ export class AgentSettings implements vscode.Disposable {
             agents: this.definitions.agents,
             tools: this.definitions.tools,
             builtin: BUILTIN_TOOLS,
+            coreTools: CORE_TOOLS,
+            toolPresentation: TOOL_PRESENTATION,
             contracts: this.builtinCatalog().map((t) => ({
               name: t.name,
               description: t.description,
