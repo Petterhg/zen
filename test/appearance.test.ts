@@ -109,6 +109,12 @@ test("macOS branding installs a valid icon idempotently without changing bundle 
     plist,
     "<plist><dict><key>CFBundleIconFile</key><string>VSCodium.icns</string><key>CFBundleIconName</key><string>VSCodium</string><key>CFBundleName</key><string>Zen</string><key>CFBundleDisplayName</key><string>Pair Code</string><key>CFBundleIdentifier</key><string>dev.paircode.editor</string></dict></plist>",
   );
+  const localized = join(contents, "Resources/sv.lproj/InfoPlist.strings");
+  mkdirSync(join(contents, "Resources/sv.lproj"), { recursive: true });
+  writeFileSync(
+    localized,
+    '"OtherKey" = "Preserved";\n"CFBundleName" = "VSCodium";\n',
+  );
   const moduleUrl = new URL("../scripts/branding.mjs", import.meta.url).href;
   const apply = () =>
     execFileSync(process.execPath, [
@@ -127,7 +133,19 @@ test("macOS branding installs a valid icon idempotently without changing bundle 
     assert.match(first, /<key>CFBundleName<\/key><string>VSCodium<\/string>/);
     assert.equal(icon.subarray(0, 4).toString(), "icns");
     assert.equal(icon.readUInt32BE(4), icon.length);
+    const names = readFileSync(localized, "utf8");
+    assert.match(names, /"CFBundleName" = "Zen";/);
+    assert.match(names, /"CFBundleDisplayName" = "Zen";/);
+    assert.match(names, /"OtherKey" = "Preserved";/);
+    assert.match(
+      readFileSync(
+        join(contents, "Resources/en.lproj/InfoPlist.strings"),
+        "utf8",
+      ),
+      /"CFBundleName" = "Zen";/,
+    );
     apply();
+    assert.equal(readFileSync(localized, "utf8"), names);
     assert.equal(readFileSync(plist, "utf8"), first);
     assert.deepEqual(readFileSync(join(contents, "Resources/Zen.icns")), icon);
   } finally {
