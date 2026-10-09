@@ -292,7 +292,7 @@ test("saved research survives a session, routes by current file and invalidates 
   const retrieved = (await lookup.execute({ query: "gateway" }, signal())) as {
     briefs: { services: { name: string }[] }[];
   };
-  assert.equal(retrieved.briefs[0].services[0].name, "gateway");
+  assert.equal(retrieved.briefs[0].services.length, 0); // Explicit service invalidation is not cleared by unchanged seed hashes.
   assert.equal(
     (
       (await next
@@ -491,7 +491,9 @@ test("explorer exposes batched reads, reuses compact research, and exports each 
     researchReference: {
       briefs: [{ findings: "Prior service entrypoint is main.py" }],
     },
-    onReport: (report) => (received = report),
+    onReport: (report) => {
+      received = report;
+    },
     tools: [
       {
         name: "read_files",
@@ -521,7 +523,7 @@ test("explorer exposes batched reads, reuses compact research, and exports each 
       const body = JSON.parse(String(init?.body));
       requests++;
       if (requests === 1) {
-        assert.match(body.messages[1].content, /Prior service entrypoint/);
+        assert.match(JSON.stringify(body.messages), /Prior service entrypoint/);
         assert.deepEqual(
           body.tools.map(
             (t: { function: { name: string } }) => t.function.name,

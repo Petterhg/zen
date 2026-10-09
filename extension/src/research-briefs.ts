@@ -19,6 +19,37 @@ export interface ServiceBrief {
   unknowns: string[];
 }
 
+/** Recover only a complete JSON object with redundant closing quote/braces, never prose or code. */
+function researchJson(summary: string): unknown {
+  const text = summary
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    return JSON.parse(text);
+  } catch {
+    /* A nested string can acquire redundant suffix delimiters. */
+  }
+  if (!text.startsWith("{")) throw new Error("Invalid research JSON");
+  let depth = 0,
+    quoted = false,
+    escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === "{" || c === "[") depth++;
+    else if (c === "}" || c === "]") {
+      depth--;
+      if (depth === 0 && /^[\s"}]*$/.test(text.slice(i + 1)))
+        return JSON.parse(text.slice(0, i + 1));
+    }
+  }
+  throw new Error("Invalid research JSON");
+}
 /** Parse the backend's optional structured summary, accepting only claims backed by read source. */
 export function parseResearchSummary(
   summary: string,
@@ -26,12 +57,7 @@ export function parseResearchSummary(
 ): { answer: string; services: ServiceBrief[] } {
   let value: unknown;
   try {
-    value = JSON.parse(
-      summary
-        .trim()
-        .replace(/^```(?:json)?\s*/i, "")
-        .replace(/\s*```$/, ""),
-    );
+    value = researchJson(summary);
   } catch {
     return { answer: summary.slice(0, 4000), services: [] };
   }
@@ -53,7 +79,10 @@ export function parseResearchSummary(
     if (
       typeof c.text !== "string" ||
       typeof c.path !== "string" ||
-      !Number.isInteger(c.line) ||
+      !(
+        Number.isInteger(c.line) ||
+        (typeof c.line === "string" && /^[1-9][0-9]*$/.test(c.line))
+      ) ||
       Number(c.line) < 1
     )
       return;
@@ -124,6 +153,7 @@ export interface ResearchBrief {
   paths: string[];
   coverage: string;
   stale: boolean;
+  invalidated?: boolean;
   savedAt: number;
   durable: boolean;
   workspaceSignature?: string;
@@ -178,6 +208,7 @@ const terms = (value: string) =>
 /** Source-backed research routes. Saved-source briefs persist locally; unsaved work stays in this window. */
 export class ResearchBriefs {
   private items: ResearchBrief[] = [];
+  private sourceEpoch = 0;
   private writes: Promise<void> = Promise.resolve();
   constructor(private store?: BriefStore) {
     const loaded = store?.get<unknown>(storeKey);
@@ -210,6 +241,7 @@ export class ResearchBriefs {
                 String(b.coverage ?? "Incomplete coverage."),
                 500,
               ),
+              invalidated: b.invalidated === true,
               stale: true, // An editor version is not valid across launches.
               savedAt: Number.isFinite(b.savedAt) ? Number(b.savedAt) : 0,
               durable: b.durable === true,
@@ -367,6 +399,7 @@ export class ResearchBriefs {
     verifier: SourceVerifier,
     signal: AbortSignal,
   ): Promise<void> {
+    signal.throwIfAborted();
     this.remember(question, scope, report, workspaceSignature, false);
     const candidate = this.items[0];
     if (!candidate?.durable) return;
@@ -451,6 +484,7 @@ export class ResearchBriefs {
     verifier: SourceVerifier,
     signal: AbortSignal,
   ): Promise<{ briefs: ResearchBrief[]; instruction: string }> {
+    const epoch = this.sourceEpoch;
     const snapshot = this.snapshot(question, currentFile, workspaceSignature);
     const briefs: ResearchBrief[] = [];
     const paths = [...new Set(snapshot.briefs.flatMap((b) => b.paths))];
@@ -472,7 +506,10 @@ export class ResearchBriefs {
     for (const brief of snapshot.briefs) {
       signal.throwIfAborted();
       if (!brief.paths.length) continue;
-      let changed = !brief.durable,
+      let changed =
+          !brief.durable ||
+          brief.invalidated === true ||
+          epoch !== this.sourceEpoch,
         permitted = true;
       for (const file of brief.paths) {
         const actual = checked.get(file)?.hash;
@@ -497,7 +534,7 @@ export class ResearchBriefs {
               services: [],
               evidence: permittedEvidence,
             }
-          : { ...brief, evidence: permittedEvidence },
+          : { ...brief, stale: false, evidence: permittedEvidence },
       );
     }
     return { ...snapshot, briefs };
@@ -546,7 +583,8 @@ export class ResearchBriefs {
       },
     };
   }
-  invalidate(file?: string): void {
+  invalidate(file?: string): boolean {
+    this.sourceEpoch++;
     let changed = false;
     this.items = this.items.map((item) => {
       const stale =
@@ -555,10 +593,11 @@ export class ResearchBriefs {
         (!item.paths.length && !item.scope) ||
         item.paths.some((p) => touches(file, p)) ||
         withinScope(file, item);
-      if (stale && !item.stale) changed = true;
-      return stale === item.stale ? item : { ...item, stale };
+      if (stale && (!item.stale || !item.invalidated)) changed = true;
+      return stale ? { ...item, stale, invalidated: true } : item;
     });
     if (changed) this.persist();
+    return changed;
   }
   beginSession(): void {
     this.items = this.items
@@ -573,6 +612,7 @@ export class ResearchBriefs {
       }));
   }
   clear(): void {
+    this.sourceEpoch++;
     this.items = [];
     this.persist();
   }

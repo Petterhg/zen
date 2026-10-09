@@ -24,9 +24,10 @@ const generated = new Set([
   ".next",
   ".turbo",
 ]);
-const excluded = (relative: string) =>
+export const discoveryExcluded = (relative: string) =>
   isPrivatePath(relative) ||
   relative.split(/[\\/]/).some((part) => generated.has(part));
+const excluded = discoveryExcluded;
 export interface DiscoveryRoot {
   name: string;
   path: string;

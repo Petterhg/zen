@@ -1,7 +1,20 @@
 import { PersonalMemory } from "./memory-service.js";
 import { IndexService } from "./index-service.js";
 import { configurationRequiresCancellation } from "./settings-policy.js";
-import { ResearchBriefs } from "./research-briefs.js";
+import {
+  ContextWarmups,
+  serviceScope,
+  contextRelevant,
+  explicitExploration,
+  explorationScope,
+  compactResearchContext,
+  compactServiceMap,
+  hasFreshService,
+  orientationSeed,
+  ORIENTATION_INSTRUCTIONS,
+  type ServiceMap,
+} from "./working-context.js";
+import { ResearchBriefs, parseResearchSummary } from "./research-briefs.js";
 import { RequestTargets } from "./request-target.js";
 import {
   decideEffort,
@@ -23,13 +36,14 @@ import {
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { WorkspaceDiscovery } from "./discovery.js";
+import { WorkspaceDiscovery, discoveryExcluded } from "./discovery.js";
 import { digest } from "./code-chunks.js";
 import {
   createLiveSession,
   requestBackend,
   requestInline,
   DEFAULT_MODELS,
+  type BackendTool,
 } from "./backend.js";
 import {
   canApplyProposal,
@@ -99,6 +113,192 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private recentFiles: string[] = [];
   private research: ResearchArticle[] = [];
   private researchBriefs: ResearchBriefs;
+  private contextWarmups = new ContextWarmups();
+  private contextEngaged = false;
+  private contextCues = new Set<string>();
+  private contextDwell?: ReturnType<typeof setTimeout>;
+  private contextScope(file: string): string {
+    const scope = serviceScope(file);
+    return scope === "." && (vscode.workspace.workspaceFolders?.length ?? 0) > 1
+      ? file.split("/")[0]
+      : scope;
+  }
+  private resetWorkingContext(): void {
+    this.contextWarmups.reset();
+    this.contextEngaged = false;
+    this.contextCues.clear();
+    clearTimeout(this.contextDwell);
+    this.post({ type: "contextStatus", state: "idle" });
+  }
+  private orientationKey(scope: string): string {
+    const provider = this.configuration().get<Provider>("backend", "groq");
+    return JSON.stringify([
+      this.researchWorkspaceSignature(),
+      scope,
+      provider,
+      this.configuration().get(`${provider}Model`, DEFAULT_MODELS[provider]),
+    ]);
+  }
+  private async warmOrientation(
+    context: EditorContext,
+    question: string,
+    tools: BackendTool[],
+    map?: ServiceMap,
+  ): Promise<string> {
+    const scope = this.contextScope(context.file),
+      key = this.orientationKey(scope);
+    const token = this.sessionToken,
+      workspace = this.researchWorkspaceSignature();
+    const provider = this.configuration().get<Provider>("backend", "groq");
+    const model = this.configuration().get(
+      `${provider}Model`,
+      DEFAULT_MODELS[provider],
+    );
+    const startedAt = Date.now(),
+      warmRevision = this.contextWarmups.revision;
+    const { started } = this.contextWarmups.start(
+      key,
+      async (signal) => {
+        const valid = () =>
+          !signal.aborted &&
+          warmRevision === this.contextWarmups.revision &&
+          token === this.sessionToken &&
+          workspace === this.researchWorkspaceSignature() &&
+          vscode.workspace.isTrusted &&
+          this.configuration().get("shareEditorContext", true);
+        if (!valid()) return;
+        const seed = await orientationSeed(
+          tools,
+          context.file,
+          scope,
+          question,
+          signal,
+          map,
+        );
+        if (!seed?.evidence.length)
+          throw new Error("No permitted source for orientation.");
+        const apiKey = await this.key(provider);
+        if (!apiKey) throw new Error("Backend key unavailable.");
+        if (!valid()) return;
+        const result = await requestBackend({
+          provider,
+          model,
+          apiKey,
+          signal,
+          timeoutMs: 30000,
+          assistanceLevel: 0,
+          effort: "none",
+          tools: [],
+          instructions: ORIENTATION_INSTRUCTIONS,
+          history: [{ role: "user", text: question }],
+          taskState: {
+            scope,
+            currentFile: context.file,
+            inspectedSources: seed.sources,
+            map: compactServiceMap(seed.map),
+          },
+          onTrace: (event) =>
+            this.trace.record({
+              ...event,
+              type: `orientation.${event.type}`,
+              scope,
+            }),
+        });
+        if (!valid()) return;
+        const parsed = parseResearchSummary(result.summary, seed.evidence);
+        parsed.services = parsed.services.filter((s) => s.scope === scope);
+        this.trace.record({
+          type: "orientation.synthesized",
+          scope,
+          summary: result.summary,
+          groundedServices: parsed.services.length,
+          evidence: seed.evidence,
+        });
+        if (!parsed.services.length)
+          throw new Error("Orientation had no grounded service claims.");
+        await this.researchBriefs.rememberVerified(
+          `Service orientation: ${scope}`,
+          scope,
+          {
+            status: "completed",
+            findings: parsed.answer,
+            serviceBriefs: parsed.services,
+            evidence: seed.evidence,
+            coverage: seed.map.coverage + " Only seed excerpts inspected.",
+            containsUnsaved: seed.evidence.some((e) => e.unsaved === true),
+          },
+          workspace,
+          (file, abort) => this.verifyResearchSource(file, abort),
+          signal,
+        );
+        if (valid())
+          this.trace.record({
+            type: "orientation.completed",
+            scope,
+            elapsedMs: Date.now() - startedAt,
+            sourceFiles: seed.evidence.length,
+            seedBytes: Buffer.byteLength(JSON.stringify(seed)),
+            serviceClaims: parsed.services.length,
+          });
+      },
+      (error) =>
+        this.trace.record({
+          type: "orientation.failed",
+          scope,
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+    );
+
+    if (started)
+      this.trace.record({
+        type: "orientation.started",
+        scope,
+        file: context.file,
+      });
+    return key;
+  }
+  private scheduleOrientation(): void {
+    clearTimeout(this.contextDwell);
+    if (!this.contextEngaged) return;
+    const context = this.snapshot();
+    if (!context) return;
+    const warmRevision = this.contextWarmups.revision;
+    this.contextDwell = setTimeout(() => {
+      void (async () => {
+        if (
+          warmRevision !== this.contextWarmups.revision ||
+          !this.contextEngaged ||
+          this.backendRunning ||
+          this.snapshot()?.file !== context.file
+        )
+          return;
+        const signal = new AbortController().signal;
+        const reference = await this.researchBriefs.verifiedSnapshot(
+          "",
+          context.file,
+          this.researchWorkspaceSignature(),
+          (file, s) => this.verifyResearchSource(file, s),
+          signal,
+        );
+        if (
+          warmRevision !== this.contextWarmups.revision ||
+          !this.contextEngaged ||
+          this.snapshot()?.file !== context.file ||
+          hasFreshService(reference, this.contextScope(context.file))
+        )
+          return;
+        await this.warmOrientation(
+          context,
+          "Orient to this service for future file questions.",
+          workspaceTools(() =>
+            this.configuration().get("shareEditorContext", true),
+          ),
+        );
+      })().catch(() => {
+        /* Passive preparation never interrupts the human. */
+      });
+    }, 3000);
+  }
   private researchWorkspaceSignature(): string {
     return JSON.stringify(
       (vscode.workspace.workspaceFolders ?? [])
@@ -132,7 +332,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       !this.configuration().get("shareEditorContext", true)
     )
       throw new Error("Workspace context sharing is disabled.");
-    return digest(source);
+    const document = vscode.workspace.textDocuments.find(
+      (d) => d.uri.fsPath === resolved,
+    );
+    return digest(document?.isDirty ? document.getText() : source);
   }
   private codeIndex: IndexService;
   private memory: PersonalMemory;
@@ -288,10 +491,18 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     this.disposables.push(this.codeIndex);
     const briefWatcher = vscode.workspace.createFileSystemWatcher("**/*");
     const changedBriefSource = (uri: vscode.Uri) => {
-      if (uri.scheme !== "file") return;
-      if (/(?:^|[\\/])(?:\.pairignore|\.gitignore|\.ignore)$/.test(uri.fsPath))
+      if (uri.scheme !== "file" || discoveryExcluded(uri.fsPath)) return;
+      if (
+        /(?:^|[\\/])(?:\.pairignore|\.gitignore|\.ignore)$/.test(uri.fsPath)
+      ) {
         this.researchBriefs.clear();
-      else this.researchBriefs.invalidate(uri.fsPath);
+        this.resetWorkingContext();
+      } else if (this.researchBriefs.invalidate(uri.fsPath))
+        this.trace.record({
+          type: "context.invalidated",
+          file: vscode.workspace.asRelativePath(uri),
+          cause: "filesystem",
+        });
     };
     this.disposables.push(
       briefWatcher,
@@ -447,6 +658,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       ),
       this.proposalChanges,
       this.lensChanges,
+      vscode.workspace.onDidChangeWorkspaceFolders(() =>
+        this.resetWorkingContext(),
+      ),
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor?.document.uri.scheme === "file") this.editor = editor;
         else if (!vscode.window.visibleTextEditors.length)
@@ -463,6 +677,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         if (this.proposal?.uri === editor?.document.uri.toString())
           void this.showProposal();
         this.scheduleContext();
+        this.scheduleOrientation();
       }),
       vscode.window.onDidChangeTextEditorSelection((event) => {
         if (
@@ -477,10 +692,21 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           /(?:^|[\\/])(?:\.pairignore|\.gitignore|\.ignore)$/.test(
             event.document.uri.fsPath,
           )
-        )
+        ) {
           this.researchBriefs.clear();
-        else if (event.document.uri.scheme === "file")
-          this.researchBriefs.invalidate(event.document.uri.fsPath);
+          this.resetWorkingContext();
+        } else if (
+          event.document.uri.scheme === "file" &&
+          event.contentChanges.length &&
+          !discoveryExcluded(event.document.uri.fsPath)
+        ) {
+          if (this.researchBriefs.invalidate(event.document.uri.fsPath))
+            this.trace.record({
+              type: "context.invalidated",
+              file: vscode.workspace.asRelativePath(event.document.uri),
+              cause: "buffer",
+            });
+        }
         if (this.codeRefs.some((r) => r.uri === event.document.uri.toString()))
           this.clearPointing();
         if (this.proposal?.uri === event.document.uri.toString()) {
@@ -741,6 +967,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       text,
       selection,
       textStart,
+      textStartLine: document.positionAt(textStart).line + 1,
+      textStartsMidLine: document.positionAt(textStart).character !== 0,
       cursor: {
         line: editor.selection.active.line,
         character: editor.selection.active.character,
@@ -1286,6 +1514,14 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         throw new Error(
           "No user transcript has arrived yet. Please repeat your request.",
         );
+      if (context) {
+        try {
+          await this.verifyResearchSource(context.file, controller.signal);
+        } catch {
+          controller.signal.throwIfAborted();
+          context = undefined; // Ignored/revoked source cannot be sent via a captured editor either.
+        }
+      }
       this.trace.record({
         type: "backend.started",
         assistanceLevel: assistance,
@@ -1311,31 +1547,31 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       const memoryScope = await this.memory.scope(context?.uri);
       const latestHuman =
         history.filter((e) => e.role === "user").at(-1)?.text ?? "";
-      const memoryReference = await this.memory.reference(
-        latestHuman,
-        memoryScope,
-      );
-      controller.signal.throwIfAborted();
       this.post({ type: "taskIntent", text: latestHuman.slice(0, 320) });
-      const configuredEffort = this.configuration().get<string>(
-        "reasoningEffort",
-        "auto",
-      );
-      const effort =
-        configuredEffort === "auto"
-          ? await decideEffort({
-              apiKey: await this.key("openai"),
-              history,
-              editor: context?.file,
-              signal: controller.signal,
-              onTrace: (event) =>
-                this.trace.record({ ...event, taskRevision: revision }),
-            })
-          : (configuredEffort as Effort);
+      // Recall and effort routing do not depend on source orientation; overlap them.
+      const supplemental = Promise.allSettled([
+        this.memory.reference(latestHuman, memoryScope),
+        (async () => {
+          const configuredEffort = this.configuration().get<string>(
+            "reasoningEffort",
+            "auto",
+          );
+          return configuredEffort === "auto"
+            ? decideEffort({
+                apiKey: await this.key("openai"),
+                history,
+                editor: context?.file,
+                signal: controller.signal,
+                onTrace: (event) =>
+                  this.trace.record({ ...event, taskRevision: revision }),
+              })
+            : (configuredEffort as Effort);
+        })(),
+      ]);
       const researchWorkspace = this.researchWorkspaceSignature();
       const verifyResearch = (file: string, signal: AbortSignal) =>
         this.verifyResearchSource(file, signal);
-      const researchReference = await this.researchBriefs.verifiedSnapshot(
+      let researchReference = await this.researchBriefs.verifiedSnapshot(
         latestHuman,
         context?.file ?? "",
         researchWorkspace,
@@ -1361,6 +1597,151 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         for (let i = readTools.length - 1; i >= 0; i--)
           if (["web_search", "fetch_page"].includes(readTools[i].name))
             readTools.splice(i, 1);
+      let workingContext: unknown;
+      if (
+        context &&
+        contextRelevant(latestHuman) &&
+        vscode.workspace.isTrusted &&
+        this.configuration().get("shareEditorContext", true)
+      ) {
+        this.contextEngaged = true;
+        const scope = this.contextScope(context.file);
+        const mapTool = readTools.find((t) => t.name === "service_context")!;
+        try {
+          const startLine = Math.max(1, (context.cursor?.line ?? 0) - 24);
+          const [mapped, currentRead] = await Promise.allSettled([
+            mapTool.execute(
+              { path: context.file, scope, question: latestHuman },
+              controller.signal,
+            ),
+            readTools
+              .find((t) => t.name === "read_files")!
+              .execute(
+                {
+                  files: [
+                    {
+                      path: context.file,
+                      start_line: startLine,
+                      end_line: startLine + 79,
+                    },
+                  ],
+                },
+                controller.signal,
+              ),
+          ]);
+          if (mapped.status === "rejected") throw mapped.reason;
+          const map = mapped.value as ServiceMap;
+          const currentFileEvidence =
+            currentRead.status === "fulfilled"
+              ? (currentRead.value as { files: unknown[] }).files[0]
+              : undefined;
+          const fresh = hasFreshService(researchReference, scope);
+          // Explicit exploration already gets its own seeded researcher.
+          const explicitExplore = explicitExploration(latestHuman);
+          let warmKey: string | undefined;
+          if (!fresh && !explicitExplore) {
+            warmKey = await this.warmOrientation(
+              context,
+              latestHuman,
+              readTools,
+              map,
+            );
+            if (
+              this.contextWarmups.state(warmKey) === "working" &&
+              !this.contextCues.has(scope)
+            ) {
+              this.contextCues.add(scope);
+              this.post({
+                type: "contextStatus",
+                state: "working",
+                scope,
+                text: "Let me get some context of what we’re working on…",
+              });
+              if (this.conversationMode === "voice")
+                this.post({
+                  type: "liveAppend",
+                  sessionToken: token,
+                  delegationId: delegationId ?? null,
+                  mode: "commentary",
+                  content:
+                    "One brief orientation cue: Let me get some context of what we’re working on. Then wait quietly for the result; do not repeat progress updates.",
+                });
+            }
+            await this.contextWarmups.wait(warmKey, controller.signal);
+            researchReference = await this.researchBriefs.verifiedSnapshot(
+              latestHuman,
+              context.file,
+              researchWorkspace,
+              verifyResearch,
+              controller.signal,
+            );
+          }
+          workingContext = {
+            ...compactServiceMap(map),
+            currentFileEvidence,
+            state: hasFreshService(researchReference, scope)
+              ? "ready"
+              : "partial",
+            researcher: warmKey
+              ? this.contextWarmups.state(warmKey)
+              : "not needed",
+          };
+          this.trace.record({
+            type: "context.prepared",
+            taskRevision: revision,
+            scope,
+            reused: fresh,
+            bytes: Buffer.byteLength(
+              JSON.stringify({
+                workingContext,
+                researchReference: compactResearchContext(researchReference),
+              }),
+            ),
+          });
+          if (warmKey)
+            readTools.push({
+              name: "working_context",
+              description:
+                "Retrieve this task’s automatic service orientation, waiting at most eight seconds if still running. Use only when a service-level gap matters; current-file questions can use captured code or read_files immediately. Does not start another researcher.",
+              parameters: {
+                type: "object",
+                properties: {},
+                additionalProperties: false,
+              },
+              execute: async (_args, signal) => {
+                await this.contextWarmups.wait(warmKey!, signal, 8000);
+                return {
+                  state: this.contextWarmups.state(warmKey!),
+                  ...compactResearchContext(
+                    await this.researchBriefs.verifiedSnapshot(
+                      latestHuman,
+                      context!.file,
+                      researchWorkspace,
+                      verifyResearch,
+                      signal,
+                    ),
+                  ),
+                };
+              },
+            });
+        } catch (error) {
+          controller.signal.throwIfAborted();
+          this.trace.record({
+            type: "context.unavailable",
+            taskRevision: revision,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          if (revision === this.jobRevision)
+            this.post({ type: "contextStatus", state: "idle" });
+        }
+      }
+      const [memoryResult, effortResult] = await supplemental;
+      controller.signal.throwIfAborted();
+      if (memoryResult.status === "rejected") throw memoryResult.reason;
+      if (effortResult.status === "rejected") throw effortResult.reason;
+      const memoryReference = memoryResult.value,
+        effort = effortResult.value;
       const explorer = explorationTool({
         researchReference,
         onReport: (report, question, scope) => {
@@ -1371,18 +1752,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
             this.configuration().get("shareEditorContext", true) &&
             researchWorkspace === this.researchWorkspaceSignature()
           )
-            void this.researchBriefs.rememberVerified(
+            return this.researchBriefs.rememberVerified(
               question,
               scope,
-              {
-                ...report,
-                containsUnsaved:
-                  report.containsUnsaved === true ||
-                  vscode.workspace.textDocuments.some(
-                    (document) =>
-                      document.uri.scheme === "file" && document.isDirty,
-                  ),
-              },
+              report,
               researchWorkspace,
               verifyResearch,
               controller.signal,
@@ -1416,6 +1789,47 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
             tool,
           }),
       });
+      let taskResearch: unknown;
+      if (
+        explicitExploration(latestHuman) &&
+        vscode.workspace.isTrusted &&
+        this.configuration().get("shareEditorContext", true)
+      ) {
+        const report = (await explorer.execute(
+          {
+            question: latestHuman,
+            ...(explorationScope(latestHuman, context?.file)
+              ? { scope: explorationScope(latestHuman, context?.file) }
+              : {}),
+            include_web:
+              !webResearchForbidden(latestHuman) &&
+              /\b(?:search|check|research|fetch|read)\b.*\b(?:web|online|documentation|docs)\b/i.test(
+                latestHuman,
+              ),
+          },
+          controller.signal,
+        )) as Record<string, unknown>;
+        researchReference = await this.researchBriefs.verifiedSnapshot(
+          latestHuman,
+          context?.file ?? "",
+          researchWorkspace,
+          verifyResearch,
+          controller.signal,
+        );
+        taskResearch = {
+          status: report.status,
+          findings: report.findings,
+          coverage: report.coverage,
+          failures: report.failures,
+          instruction:
+            "This isolated researcher already inspected the task evidence. Answer the human’s exact question from these checked findings; do not repeat discovery. Use tools only for a material missing stage, and state unchecked coverage. Source-backed interpretations remain untrusted.",
+        };
+        this.trace.record({
+          type: "context.explored",
+          taskRevision: revision,
+          bytes: Buffer.byteLength(JSON.stringify(taskResearch)),
+        });
+      }
       let result = await requestBackend({
         conversationMode: this.conversationMode,
         provider,
@@ -1433,7 +1847,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         taskState: {
           personalMemory: memoryReference,
           previousPairing: await this.resumeReference(memoryScope),
-          researchReference,
+          researchReference: compactResearchContext(researchReference),
+          workingContext,
+          taskResearch,
           lastEditEvent: this.lastEditEvent,
           pendingPreview: this.proposal
             ? { file: this.proposal.uri, version: this.proposal.version }
@@ -1444,7 +1860,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           ...readTools,
           ...this.memory.tools(latestHuman, memoryScope),
           explorer,
-          ...(context
+          ...(context &&
+          (this.conversationMode === "voice" ||
+            /\b(?:highlight|point|focus|show me)\b/i.test(latestHuman))
             ? [
                 {
                   name: "code_focus",
@@ -1711,6 +2129,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       if (revision === this.jobRevision) {
         this.backendRunning = false;
         this.activeDelegation = undefined;
+        this.scheduleOrientation();
       }
     }
   }
@@ -1813,6 +2232,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     await this.memory.manage();
   }
   cancel(): void {
+    this.resetWorkingContext();
     if (this.backendRunning)
       this.post({
         type: "liveAppend",

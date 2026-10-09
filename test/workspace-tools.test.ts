@@ -143,6 +143,21 @@ test("workspace tools retain unsaved reads, scoped search and language-service e
   assert.match(batchFiles[0].lines!, /UNSAVED needle/);
   assert.match(batchFiles[2].error!, /excluded/);
   assert.doesNotMatch(JSON.stringify(batch), /PRIVATE_KEY/);
+  const map = await run("service_context", {
+    path: "services/ner/src/main.py",
+  });
+  assert.equal(map.scope, "services/ner");
+  assert.ok((map.seedFiles as string[]).includes("services/ner/src/main.py"));
+  assert.doesNotMatch(
+    JSON.stringify(map),
+    /services\/other|PRIVATE_KEY|\.env|UNSAVED needle/,
+  );
+  const peer = await run("service_context", {
+    path: "services/ner/src/main.py",
+    scope: "services/other",
+  });
+  assert.equal(peer.currentFile, undefined);
+  assert.doesNotMatch(JSON.stringify(peer), /services\/ner/);
   const usages = await run("symbol_usages", {
     path: "services/ner/src/main.py",
     line: 2,
@@ -156,7 +171,18 @@ test("workspace tools retain unsaved reads, scoped search and language-service e
     run("read_file", { path: "services/ner/.env" }),
     /excluded/,
   );
+  const originalRoots = mock.workspace.workspaceFolders;
+  mock.workspace.workspaceFolders = [];
+  await assert.rejects(
+    run("read_file", { path: "services/ner/src/main.py" }),
+    /roots changed/,
+  );
+  mock.workspace.workspaceFolders = originalRoots;
   enabled = false;
+  await assert.rejects(
+    run("service_context", { scope: "services/ner" }),
+    /disabled/,
+  );
   await assert.rejects(
     run("read_file", { path: "services/ner/src/main.py" }),
     /disabled/,

@@ -753,6 +753,10 @@
       );
     if (data.type === "research") showResearch(data.article);
     if (data.type === "researchHistory") data.articles.forEach(showResearch);
+    if (data.type === "contextStatus") {
+      $("contextStatus").textContent = data.text || "";
+      $("contextStatus").classList.toggle("hidden", data.state !== "working");
+    }
     if (data.type === "backendStatus") {
       $("backendActivity").classList.toggle("hidden", data.state !== "working");
       $("backendActivity").querySelectorAll("span")[1].textContent = data.tool

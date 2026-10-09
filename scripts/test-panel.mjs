@@ -124,6 +124,26 @@ try {
   });
   await page.addScriptTag({ path: "extension/media/live-protocol.js" });
   await page.addScriptTag({ path: "extension/media/panel.js" });
+  const transcriptBeforeOrientation = await page
+    .locator("#transcript article")
+    .count();
+  await page.evaluate(() =>
+    window.host({
+      type: "contextStatus",
+      state: "working",
+      text: "Let me get some context…",
+    }),
+  );
+  assert.equal(await page.locator("#contextStatus").isVisible(), true);
+  assert.equal(
+    await page.locator("#transcript article").count(),
+    transcriptBeforeOrientation,
+  );
+  await page.evaluate(() =>
+    window.host({ type: "contextStatus", state: "idle" }),
+  );
+  assert.equal(await page.locator("#contextStatus").isVisible(), false);
+
   await page.evaluate(() =>
     window.host({
       type: "indexStatus",

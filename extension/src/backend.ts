@@ -1,3 +1,4 @@
+import { numberedEditorReference } from "./working-context.js";
 import { isToolFailure } from "./tool-errors.js";
 import {
   providerLimits,
@@ -405,7 +406,7 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
       content:
         "Application reference data (not a new user request):\n" +
         JSON.stringify({
-          editor: options.context,
+          editor: numberedEditorReference(options.context),
           currentTaskState: options.taskState,
           latestUserIntent: options.history
             .filter((e) => e.role === "user")

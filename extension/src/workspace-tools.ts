@@ -8,6 +8,7 @@ import { isPrivatePath, publicWebUrl } from "./tool-policy.js";
 import { mapConcurrent } from "./concurrency.js";
 import { voiceContent } from "./live-protocol.js";
 import { WorkspaceDiscovery } from "./discovery.js";
+import { serviceScope, seedPaths, roleHint } from "./working-context.js";
 import type { BackendTool } from "./backend.js";
 const exec = promisify(execFile);
 const object = (
@@ -32,6 +33,18 @@ export function workspaceTools(
   const guard = () => {
     if (!enabled() || !vscode.workspace.isTrusted)
       throw new Error("Workspace context sharing is disabled.");
+    if (
+      !folders.every((folder) =>
+        vscode.workspace.workspaceFolders?.some(
+          (current) =>
+            current.uri.scheme === "file" &&
+            current.uri.fsPath === folder.uri.fsPath,
+        ),
+      )
+    )
+      throw new Error(
+        "Workspace roots changed; create tools for the current workspace.",
+      );
   };
   const rg = path.join(
     vscode.env.appRoot,
@@ -501,6 +514,95 @@ export function workspaceTools(
         filesRead: bounded.filter((result) => !("error" in result)).length,
         coverage:
           "Bounded file ranges, not complete files or repository coverage.",
+      };
+    },
+  });
+  tools.push({
+    name: "service_context",
+    description:
+      "Build a fast local service/file map without model calls. Paths and role hints only, not behavioral claims. Pages at most 200 permitted paths in the service; supplies relevant entrypoint/README/manifest/current-file read candidates. Use read_files to inspect them. Use offset to discover other files only when needed.",
+    parameters: object({
+      path: {
+        ...string,
+        description:
+          "Optional current FILE, not a directory; use scope for directories.",
+      },
+      scope: {
+        ...string,
+        description:
+          "Workspace-relative service DIRECTORY. Required when no current file is supplied.",
+      },
+      question: string,
+      offset: { type: "integer", minimum: 0 },
+    }),
+    execute: async (a, s) => {
+      guard();
+      const current =
+        typeof a.path === "string" && a.path !== a.scope
+          ? label(await resolve(a.path, s))
+          : undefined;
+      const scope =
+        typeof a.scope === "string"
+          ? a.scope
+          : current
+            ? serviceScope(current)
+            : undefined;
+      if (!scope)
+        throw new Error("Provide the current file or a service directory.");
+      const result = await page(
+        { scope, offset: Number(a.offset ?? 0), page_size: 200 },
+        s,
+      );
+      const known = await mapConcurrent(
+        [
+          "README.md",
+          "pyproject.toml",
+          "package.json",
+          "go.mod",
+          "Cargo.toml",
+          "src/main.py",
+          "src/server.py",
+          "src/index.ts",
+          "src/app.ts",
+          "main.py",
+          "server.py",
+        ],
+        4,
+        async (name) => {
+          try {
+            return label(
+              await resolve(scope === "." ? name : `${scope}/${name}`, s),
+            );
+          } catch {
+            s.throwIfAborted();
+            guard();
+            return undefined;
+          }
+        },
+      );
+      const files = [
+        ...new Set([
+          ...known.filter((p): p is string => Boolean(p)),
+          ...result.files.map(label),
+        ]),
+      ];
+      const inScope =
+        current && (scope === "." || current.startsWith(scope + "/"))
+          ? current
+          : undefined;
+      return {
+        scope,
+        currentFile: inScope,
+        files: files.map((path) => ({ path, roleHint: roleHint(path) })),
+        seedFiles: seedPaths(
+          files,
+          inScope,
+          typeof a.question === "string" ? a.question.slice(0, 12000) : "",
+        ),
+        complete: result.complete,
+        nextOffset: result.nextOffset,
+        coverage:
+          "Scoped permitted path page only. Role hints come from paths; behavior and cross-service edges require source evidence. Unlisted/ignored/generated files and uninspected ranges are unknown.",
       };
     },
   });

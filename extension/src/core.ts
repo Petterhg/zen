@@ -18,6 +18,8 @@ export interface EditorContext {
   selectionEnd: number;
   diagnostics: string[];
   textStart?: number;
+  textStartLine?: number;
+  textStartsMidLine?: boolean;
   cursor?: { line: number; character: number; offset: number };
   visibleLines?: { start: number; end: number }[];
   recentFiles?: string[];
