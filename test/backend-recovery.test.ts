@@ -307,3 +307,206 @@ test("identical tool calls are cached and a stalled loop proceeds to structured 
   assert.equal(requests, 4);
   assert.equal(traces.filter((e) => e.type === "tool.cached").length, 2);
 });
+
+test("malformed structured output is repaired with the inspected evidence still present", async () => {
+  const requests: Record<string, unknown>[] = [];
+  const traces: TraceEvent[] = [];
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    history: [{ role: "user", text: "Explain the checked flow." }],
+    conversationMode: "chat",
+    assistanceLevel: 0,
+    signal: new AbortController().signal,
+    onTrace: (e) => traces.push(e),
+    tools: [
+      {
+        name: "read_file",
+        description: "read",
+        parameters: {},
+        execute: async () => ({ lines: "12: reject before runtime" }),
+      },
+    ],
+    fetchImpl: (async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      requests.push(body);
+      const n = requests.length;
+      return Response.json({
+        choices: [
+          {
+            message:
+              n === 1
+                ? {
+                    tool_calls: [
+                      {
+                        id: "read",
+                        type: "function",
+                        function: { name: "read_file", arguments: "{}" },
+                      },
+                    ],
+                  }
+                : {
+                    content:
+                      n === 2
+                        ? "The source rejects before runtime."
+                        : n === 3
+                          ? "{bad JSON"
+                          : JSON.stringify({
+                              status: "answer",
+                              summary: "src/chat.py:12 rejects before runtime.",
+                              edits: [],
+                            }),
+                  },
+          },
+        ],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(result.summary, "src/chat.py:12 rejects before runtime.");
+  assert.equal(requests.length, 4);
+  assert.ok(
+    JSON.stringify(requests[3].messages).includes("12: reject before runtime"),
+  );
+  assert.match(
+    JSON.stringify(requests[3].messages),
+    /Application schema feedback/,
+  );
+  assert.ok(
+    traces.some(
+      (e) => e.type === "backend.repair" && e.reason === "structured_output",
+    ),
+  );
+});
+
+test("research synthesis can preserve a structured service brief beyond the chat answer limit", async () => {
+  const summary = JSON.stringify({
+    answer: "a".repeat(3500),
+    services: [{ scope: "services/demo", purpose: "b".repeat(2000) }],
+  });
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    instructions:
+      "Research only. summary contains JSON-encoded answer and services.",
+    history: [],
+    signal: new AbortController().signal,
+    fetchImpl: (async () =>
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ status: "answer", summary, edits: [] }),
+            },
+          },
+        ],
+      })) as typeof fetch,
+  });
+  assert.equal(result.summary, summary);
+  assert.ok(result.summary.length > 4000);
+});
+
+test("oversized chat answers receive feedback rather than silent truncation", async () => {
+  let calls = 0;
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    conversationMode: "chat",
+    history: [],
+    signal: new AbortController().signal,
+    fetchImpl: (async (_url, init) => {
+      calls++;
+      if (calls === 2)
+        assert.match(String(init?.body), /up to 4000 characters/);
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                status: "answer",
+                summary:
+                  calls === 1 ? "x".repeat(4001) : "Complete smaller answer.",
+                edits: [],
+              }),
+            },
+          },
+        ],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(calls, 2);
+  assert.equal(result.summary, "Complete smaller answer.");
+});
+
+test("an explicit no-web request removes public tools and cannot execute a hallucinated web call", async () => {
+  let networkTools = 0;
+  const requests: Record<string, unknown>[] = [];
+  const result = await requestBackend({
+    provider: "cerebras",
+    model: DEFAULT_MODELS.cerebras,
+    apiKey: "fake",
+    history: [
+      {
+        role: "user",
+        text: "Inspect this service. Do not edit files or use web search.",
+      },
+    ],
+    conversationMode: "chat",
+    signal: new AbortController().signal,
+    tools: [
+      {
+        name: "read_file",
+        description: "read",
+        parameters: {},
+        execute: async () => ({ path: "a.py" }),
+      },
+      ...["web_search", "fetch_page"].map((name) => ({
+        name,
+        description: "public",
+        parameters: {},
+        execute: async () => {
+          networkTools++;
+          return {};
+        },
+      })),
+    ],
+    fetchImpl: (async (_url, init) => {
+      requests.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        choices: [
+          {
+            message:
+              requests.length === 1
+                ? {
+                    tool_calls: [
+                      {
+                        id: "forbidden",
+                        type: "function",
+                        function: {
+                          name: "web_search",
+                          arguments: '{"query":"n/a"}',
+                        },
+                      },
+                    ],
+                  }
+                : {
+                    content: JSON.stringify({
+                      status: "answer",
+                      summary: "Local source only.",
+                      edits: [],
+                    }),
+                  },
+          },
+        ],
+      });
+    }) as typeof fetch,
+  });
+  assert.equal(result.status, "answer");
+  assert.equal(networkTools, 0);
+  assert.doesNotMatch(
+    JSON.stringify(requests[0].tools),
+    /web_search|fetch_page/,
+  );
+});

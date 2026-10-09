@@ -3,7 +3,11 @@ import { IndexService } from "./index-service.js";
 import { configurationRequiresCancellation } from "./settings-policy.js";
 import { ResearchBriefs } from "./research-briefs.js";
 import { RequestTargets } from "./request-target.js";
-import { decideEffort, type Effort } from "./task-policy.js";
+import {
+  decideEffort,
+  webResearchForbidden,
+  type Effort,
+} from "./task-policy.js";
 import { explorationTool } from "./exploration.js";
 import {
   bufferReferences,
@@ -1353,6 +1357,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           verifyResearch,
         ),
       ];
+      if (webResearchForbidden(latestHuman))
+        for (let i = readTools.length - 1; i >= 0; i--)
+          if (["web_search", "fetch_page"].includes(readTools[i].name))
+            readTools.splice(i, 1);
       const explorer = explorationTool({
         researchReference,
         onReport: (report, question, scope) => {

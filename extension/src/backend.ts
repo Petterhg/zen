@@ -1,5 +1,9 @@
 import { isToolFailure } from "./tool-errors.js";
-import { providerLimits, providerDiagnostic } from "./task-policy.js";
+import {
+  providerLimits,
+  providerDiagnostic,
+  webResearchForbidden,
+} from "./task-policy.js";
 import {
   parseBackendResult,
   createProposal,
@@ -322,7 +326,64 @@ async function executeTool(
     signal.removeEventListener("abort", onAbort);
   }
 }
+/** Recover schema/size errors without discarding successful source inspection. */
+async function parseWithRepair(
+  options: Options,
+  messages: Message[],
+  content: string,
+  summaryLimit: number,
+): Promise<BackendResult> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return parseBackendResult(content, summaryLimit);
+    } catch {
+      if (attempt >= 2)
+        throw new BackendError(
+          "invalid_response",
+          "The backend result did not match the required response format. No edit was applied.",
+        );
+      trace(options, {
+        type: "backend.repair",
+        reason: "structured_output",
+        attempt: attempt + 1,
+        outputChars: content.length,
+        summaryLimit,
+      });
+      let lengthFeedback = "";
+      try {
+        const value = JSON.parse(content) as { summary?: unknown };
+        if (
+          typeof value.summary === "string" &&
+          value.summary.length > summaryLimit
+        )
+          lengthFeedback = ` The summary has ${value.summary.length} characters, exceeding ${summaryLimit}. Condense it to under ${Math.floor(summaryLimit * 0.65)} characters to leave a safe margin; retain the answer and key citations, remove repetition and optional detail.`;
+      } catch {
+        // Malformed JSON receives the same bounded formatting repair.
+      }
+      messages.push(
+        { role: "assistant", content: content.slice(0, 32000) },
+        {
+          role: "user",
+          content: `Application schema feedback: the preceding result was invalid or oversized. Preserve the verified findings and format them again as one complete valid JSON result with status, summary (a nonempty string up to ${summaryLimit} characters), and edits. Do not truncate JSON or discard the research. For a researcher, summary must contain the complete JSON-encoded {answer,services} string requested in its instructions; reduce claim count if needed. Obey the current assistance policy. No source changes were applied.${lengthFeedback}`,
+        },
+      );
+      content =
+        (await complete(options, messages, undefined, true)).content ?? "";
+    }
+  }
+}
 export async function requestBackend(options: Options): Promise<BackendResult> {
+  if (
+    webResearchForbidden(
+      options.history.filter((e) => e.role === "user").at(-1)?.text ?? "",
+    )
+  )
+    options = {
+      ...options,
+      tools: options.tools?.filter(
+        (t) => !["web_search", "fetch_page"].includes(t.name),
+      ),
+    };
   const timeout = options.timeoutMs ?? 600000;
   const signal =
     timeout > 0
@@ -330,10 +391,12 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
       : options.signal;
   const opts = { ...options, signal };
   const instructions =
-    (options.instructions ?? backendInstructions(options.assistanceLevel)) +
+    (options.instructions ??
+      backendInstructions(options.assistanceLevel, options.conversationMode)) +
     (options.conversationMode === "chat"
       ? "\nThe human is using text chat with the microphone disconnected. Address the human directly in the summary; provide the explanation they need without referring to a speaker or voice handoff. Continue to put code changes in inline edit proposals, obey assistance level zero, and never claim an unapplied preview changed a file."
       : "");
+  const summaryLimit = options.instructions ? 12000 : 4000;
   const messages: Message[] = [
     { role: "system", content: instructions },
     ...options.history.map((e) => ({ role: e.role, content: e.text })),
@@ -373,15 +436,22 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
         messages.push({
           role: "user",
           content: options.instructions
-            ? "Application finalization: return the research findings with file:line evidence and explicitly incomplete coverage, as required by the researcher schema. No edits. Up to 4000 summary characters."
-            : "Application finalization, not a new user request: return the current result using the required JSON schema. Use only the inspected evidence above. Keep the summary brief, with no code examples, and speech to at most two short sentences. Follow the current pairing style, including guide mode returning answer with no edits. For an allowed implementation preview, put the actual code in edits and return proposal; empty oldText inserts at the captured cursor, including an empty file. Do not turn an authorized edit request into another permission question. Preserve a clarification only when a necessary target or requirement is genuinely missing. Do not perform new research or claim an edit was applied.",
+            ? "Application finalization: return the research findings with file:line evidence and explicitly incomplete coverage, as required by the researcher schema. No edits. Up to 12000 summary characters. Keep the researcher summary as the JSON-encoded string its instructions require, with answer and cited service briefs."
+            : options.conversationMode === "chat"
+              ? `Application finalization: answer this exact human question: ${options.history.filter((e) => e.role === "user").at(-1)?.text ?? "the latest question"}. Condense the inspected evidence and preceding answer into one complete text answer covering EVERY requested part, within 4000 summary characters. Keep each requested stage and its key citation rather than returning only the introduction. Explain actual behavior, execution order or impact with workspace-relative file:line citations and material unknowns. Do not infer an additive field breaks a contract unless validation proves it. The inspection results above remain available even though this formatting call has no tools. Do not refuse because tools are absent here, say only that you checked, or suggest a further lookup when the evidence already answers the question. Keep implementation code in inline edits, obey assistance level zero, and never claim an unapplied preview changed a file. Return the required JSON schema.`
+              : "Application finalization, not a new user request: return the current result using the required JSON schema. Use only the inspected evidence above. Keep the summary brief, with no code examples, and speech to at most two short sentences. Follow the current pairing style, including guide mode returning answer with no edits. For an allowed implementation preview, put the actual code in edits and return proposal; empty oldText inserts at the captured cursor, including an empty file. Do not turn an authorized edit request into another permission question. Preserve a clarification only when a necessary target or requirement is genuinely missing. Do not perform new research or claim an edit was applied.",
         });
         trace(opts, { type: "backend.finalizing" });
         content =
           (await complete(opts, messages, undefined, true)).content ?? "";
       }
       try {
-        let result = parseBackendResult(content);
+        let result = await parseWithRepair(
+          opts,
+          messages,
+          content,
+          summaryLimit,
+        );
         for (let attempt = 0; attempt < 3; attempt++) {
           let feedback = assistanceViolation(result, options.assistanceLevel);
           if (!feedback && result.edits.length) {
@@ -421,8 +491,11 @@ export async function requestBackend(options: Options): Promise<BackendResult> {
                 " Generate only one complete smaller piece now. Keep the rest for later previews. Return the required schema. No code was applied.",
             },
           );
-          result = parseBackendResult(
+          result = await parseWithRepair(
+            opts,
+            messages,
             (await complete(opts, messages, undefined, true)).content ?? "",
+            summaryLimit,
           );
         }
         return { ...result, speech: voiceContent(result.summary, 350) };

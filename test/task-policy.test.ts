@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   decideEffort,
+  webResearchForbidden,
   providerDiagnostic,
 } from "../extension/src/task-policy.js";
 import { RequestTargets } from "../extension/src/request-target.js";
@@ -324,4 +325,23 @@ test("research can continue beyond the old seven-round/twelve-call limit", async
   });
   assert.equal(executions, 20);
   assert.equal(result.status, "answer");
+});
+
+test("explicit local-only language forbids web without disabling ordinary documentation questions", () => {
+  for (const text of [
+    "No web search",
+    "Without internet",
+    "Do not edit files or search the web.",
+    "Don't browse.",
+    "Local-only exploration",
+  ])
+    assert.equal(webResearchForbidden(text), true);
+  for (const text of [
+    "Find the current web API docs",
+    "Do not forget to search the web",
+    "What does this function do?",
+    "No web server is needed; look up the current native APIs.",
+    "Do not edit the web server.",
+  ])
+    assert.equal(webResearchForbidden(text), false);
 });

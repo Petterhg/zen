@@ -58,9 +58,9 @@ These features are implemented in the prototype; this is not a production-readin
 | Project exploration | Isolated read-only researcher with discovery then synthesis, reusable local service briefs, scoped search, batched reads and language-service references.                                                                    |
 | Semantic retrieval  | One shared local Turso database per computer user, OpenAI small / 768 embeddings, checkout/repository/path/service filters, fresh lexical changes, durable deferred embedding jobs and window-local unsaved-buffer overlays. |
 | Indexing progress   | Lexical/embedding phases, stored totals, pending embedding count/deadline, cached chunk reuse and visible errors.                                                                                                            |
-| External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar.                                                                                                                                         |
+| External research   | Optional Firecrawl search/page fetching with documentation displayed in the sidebar; explicit local-only requests disable web tools.                                                                                         |
 | Language tooling    | TypeScript/JavaScript support plus Python, BasedPyright, Ruff, ESLint and Prettier integration. Python environment discovery has a known packaging issue; see the roadmap.                                                   |
-| Text chat           | Optional Chat / transcript view with bottom composer; direct backend requests, microphone disconnected, shared tools and inline previews.                                                                                    |
+| Text chat           | Optional Chat / transcript view with bottom composer; direct backend requests, complete cited answers, microphone disconnected, shared tools and inline previews.                                                            |
 | Session resume      | Local repository checkpoints, top-level Continue conversation/Start new controls, historical edit outcomes and current-file revalidation. Microphone startup stays manual.                                                   |
 | Personal memory     | Automatic backend retention, private inspect/correct/forget/pause controls, source freshness checks and optional authenticated local Hindsight. [Setup and limits](docs/personal-memory.md).                                 |
 | Development setup   | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                                                                         |
@@ -75,7 +75,7 @@ Ordered by current priority, not promised release dates. Completed work moves in
 
 - [ ] Improve conversational latency, natural interruptions and reliable voice/backend handoffs. Keep typing, navigation and assistance changes from interrupting speech; avoid repetitive acknowledgments and progress chatter.
 - [ ] Recognize completed human edits from current buffers and diagnostics, and continue without stale instructions.
-- [ ] Evaluate scoped retrieval and impact analysis on real coding questions: definitions, references, imports and tests alongside semantic matches. Measure missed evidence and latency, and report incomplete coverage honestly.
+- [ ] Evaluate scoped retrieval and impact analysis on real coding questions: definitions, references, imports and tests alongside semantic matches. Measure missed evidence and latency, and report incomplete coverage honestly. Initial native chat checks exposed overconfident framework-order claims and sequential discovery overhead; source citations alone do not prove correctness.
 - [ ] Repair Python environment discovery and keep formatting, linting and inline proposals dependable.
 - [ ] Close the local validation loop after edits with diagnostics and explicitly authorized formatter/test execution.
 

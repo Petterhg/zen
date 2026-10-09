@@ -202,6 +202,18 @@ test("editor integration indexes permitted sources, overlays dirty buffers, excl
       new AbortController().signal,
     )) as { matches: { text: string; unsaved?: boolean }[] };
   assert.ok((await search("authorize")).matches[0].text.includes("authorize"));
+  const alias = (await service.search(
+    { query: "authorize", service: "auth" },
+    new AbortController().signal,
+  )) as { matches: { text: string }[] };
+  assert.ok(alias.matches[0].text.includes("authorize"));
+  await assert.rejects(
+    service.search(
+      { query: "authorize", service: "not-a-service" },
+      new AbortController().signal,
+    ),
+    /Service filter.*not indexed/,
+  );
   docs.push({
     uri: { scheme: "file", fsPath: file },
     isDirty: true,

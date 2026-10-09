@@ -7,6 +7,13 @@ export const providerLimits = (provider: Provider) =>
     ? { contextTokens: 131072, outputTokens: 32768 }
     : { contextTokens: 131072, outputTokens: 16384 };
 
+/** Enforce an explicit local-only request in host tool availability, not just prompting. */
+export function webResearchForbidden(text: string): boolean {
+  return /\b(?:no|without)\s+(?:web|internet|browsing)\b(?!\s+(?:server|app|ui|framework|socket|service)\b)|\b(?:do not|don't|dont|never)\b(?!\s+forget\b)[^.!?\n]{0,160}\b(?:use|search|browse|access|consult)\s+(?:the\s+)?(?:web|internet)\b(?!\s+(?:server|app|ui|framework|socket|service)\b)|\b(?:do not|don't|dont|never)\s+browse\b|\blocal[- ]only\b/i.test(
+    text,
+  );
+}
+
 /** Classification controls reasoning only; it cannot grant permissions or execute tools. */
 export async function decideEffort(options: {
   apiKey?: string;

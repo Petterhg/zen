@@ -53,7 +53,10 @@ export interface Proposal {
 export const VOICE_INSTRUCTIONS = voiceInstructions(false);
 
 /** Reject malformed output and restrict patches to one exact, unique match in the captured editor. */
-export function parseBackendResult(content: string): BackendResult {
+export function parseBackendResult(
+  content: string,
+  summaryLimit = 4000,
+): BackendResult {
   const json = content
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -65,7 +68,7 @@ export function parseBackendResult(content: string): BackendResult {
   if (
     typeof result.summary !== "string" ||
     !result.summary.trim() ||
-    result.summary.length > 4000 ||
+    result.summary.length > summaryLimit ||
     !Array.isArray(result.edits) ||
     result.edits.length > 1
   )

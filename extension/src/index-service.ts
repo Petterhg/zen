@@ -327,7 +327,7 @@ export class IndexService implements vscode.Disposable {
       {
         name: "search_code",
         description:
-          "Search local indexed code by meaning plus exact words. Filters checkout (canonical absolute root path), repository (workspace root name), service (relative directory e.g. services/copilot), directory scope, and language (extension e.g. py). Defaults across open repositories; explicitly broaden service for caller/impact questions. Results include parent ranges and fresh source hashes. Index coverage may be incomplete; use search_text/read_files/symbol_usages for verification. Does not search the web.",
+          "Search local indexed code by meaning plus exact words. Filters checkout (canonical absolute root path), repository (workspace root name), service (relative directory e.g. services/copilot; unique short names resolve to that directory), directory scope, and language (extension e.g. py). Defaults across open repositories; explicitly broaden service for caller/impact questions. Results include parent ranges and fresh source hashes. Index coverage may be incomplete; use search_text/read_files/symbol_usages for verification. Does not search the web.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -423,6 +423,26 @@ export class IndexService implements vscode.Disposable {
         coverage:
           "Index is starting, disabled or the repository name did not match. Use workspace_overview/search_text meanwhile.",
       };
+    if (filter.service) {
+      const checkouts = new Set(entries.map((e) => e.checkout));
+      const services = [
+        ...new Set(
+          (await this.client.status()).scopes
+            .filter((root) => checkouts.has(root.checkout))
+            .flatMap((root) => root.services),
+        ),
+      ];
+      if (services.length && !services.includes(filter.service)) {
+        const aliases = services.filter(
+          (service) => service.split("/").at(-1) === filter.service,
+        );
+        if (aliases.length === 1) filter.service = aliases[0];
+        else
+          throw new Error(
+            "Service filter is ambiguous or not indexed. Use index_status for exact service names, or scope for a directory path; an invalid filter does not prove there are no matches.",
+          );
+      }
+    }
     let vector = this.queryCache.get(query);
     if (!vector) {
       try {
