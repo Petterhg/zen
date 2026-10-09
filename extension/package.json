@@ -243,70 +243,8 @@
           "type": "object",
           "default": {},
           "scope": "application",
-          "description": "Local research profiles. Configure with Zen: Agent Settings. Applies to new work; source-sharing and tool policy still apply.",
-          "additionalProperties": false,
-          "properties": {
-            "explorer": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "enabled": {
-                  "type": "boolean"
-                },
-                "model": {
-                  "type": "string",
-                  "enum": [
-                    "deepseek-ai/DeepSeek-V4.1-Flash",
-                    "deepseek-ai/DeepSeek-V4-Pro-0813",
-                    "zai-org/GLM-5.3-Flash"
-                  ]
-                },
-                "reasoningEffort": {
-                  "type": "string",
-                  "enum": [
-                    "none",
-                    "low",
-                    "medium",
-                    "high"
-                  ]
-                },
-                "instructions": {
-                  "type": "string",
-                  "maxLength": 8000
-                }
-              }
-            },
-            "deep_research": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "enabled": {
-                  "type": "boolean"
-                },
-                "model": {
-                  "type": "string",
-                  "enum": [
-                    "deepseek-ai/DeepSeek-V4.1-Flash",
-                    "deepseek-ai/DeepSeek-V4-Pro-0813",
-                    "zai-org/GLM-5.3-Flash"
-                  ]
-                },
-                "reasoningEffort": {
-                  "type": "string",
-                  "enum": [
-                    "none",
-                    "low",
-                    "medium",
-                    "high"
-                  ]
-                },
-                "instructions": {
-                  "type": "string",
-                  "maxLength": 8000
-                }
-              }
-            }
-          }
+          "description": "User-defined application-local subagents. Edit with Zen: Agent Settings. Version 2 contains a registry with stable IDs; legacy profiles are migrated on save.",
+          "additionalProperties": true
         }
       }
     },

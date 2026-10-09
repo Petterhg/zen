@@ -96,6 +96,39 @@
           </p>
         </section>
 
+        <section class="worker-section" aria-label="Subagents">
+          <div class="research-heading">
+            <span class="eyebrow">SUBAGENTS</span>
+            <details id="workerMenu">
+              <summary>Available workers</summary>
+              <div id="workerChoices"></div>
+              <button id="workerSettings" class="text-button">
+                Edit subagents ↗
+              </button>
+            </details>
+          </div>
+          <p id="workerEmpty" class="quiet-note">
+            Delegated work appears here.
+          </p>
+          <div id="workerList" aria-label="Worker runs"></div>
+          <section
+            id="workerInspector"
+            class="hidden"
+            aria-label="Run inspector"
+          >
+            <div class="research-heading">
+              <strong id="workerTitle"></strong
+              ><button id="workerStop" class="text-button">Stop run</button>
+            </div>
+            <p id="workerMeta" class="quiet-note"></p>
+            <nav id="workerTabs" aria-label="Run details">
+              <button data-tab="task" aria-pressed="true">Task</button
+              ><button data-tab="activity" aria-pressed="false">Activity</button
+              ><button data-tab="result" aria-pressed="false">Result</button>
+            </nav>
+            <pre id="workerContent" tabindex="0"></pre>
+          </section>
+        </section>
         <section
           id="researchSection"
           class="research hidden"

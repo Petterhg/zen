@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { researchAgents, RESEARCH_MODELS } from "./subagents.js";
+import { researchAgents, agentRegistry, RESEARCH_MODELS } from "./subagents.js";
 
 /** Dedicated settings surface. Secrets and provider calls remain in the host. */
 export class AgentSettings implements vscode.Disposable {
@@ -40,10 +40,21 @@ export class AgentSettings implements vscode.Disposable {
           await this.configureKeys();
           await this.publish(false);
         } else if (data.type === "save") {
-          const agents = researchAgents(data.agents);
+          const current = vscode.workspace
+            .getConfiguration("pairCode")
+            .inspect("subagents")?.globalValue;
+          if (data.revision !== JSON.stringify(current ?? null))
+            throw new Error(
+              "Agent settings changed in another view. Reload saved settings before saving your edits.",
+            );
+          const agents = researchAgents({ version: 2, agents: data.agents });
           await vscode.workspace
             .getConfiguration("pairCode")
-            .update("subagents", agents, vscode.ConfigurationTarget.Global);
+            .update(
+              "subagents",
+              agentRegistry(agents),
+              vscode.ConfigurationTarget.Global,
+            );
           await this.publish();
           void panel.webview.postMessage({
             type: "saved",
@@ -105,6 +116,10 @@ export class AgentSettings implements vscode.Disposable {
     void panel.webview.postMessage({
       type: "settings",
       ...(profiles ? { agents } : {}),
+      revision: JSON.stringify(
+        vscode.workspace.getConfiguration("pairCode").inspect("subagents")
+          ?.globalValue ?? null,
+      ),
       models: RESEARCH_MODELS,
       togetherReady,
       error,

@@ -868,3 +868,95 @@ body.chat-mode .workboard-scroll {
   flex: 0 1 auto;
   max-height: 45%;
 }
+
+.worker-section {
+  margin: 20px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+#workerMenu {
+  position: relative;
+  font-size: 11px;
+}
+#workerMenu summary {
+  cursor: pointer;
+}
+#workerMenu[open] {
+  padding: 8px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 5px;
+}
+#workerChoices label {
+  display: flex;
+  gap: 7px;
+  padding: 6px 0;
+}
+#workerChoices span {
+  overflow-wrap: anywhere;
+}
+#workerList {
+  max-height: 190px;
+  overflow-y: auto;
+  margin: 10px 0;
+}
+.worker-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 8px;
+  margin: 3px 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+}
+.worker-row[aria-pressed="true"] {
+  border-color: var(--vscode-panel-border);
+  color: var(--vscode-foreground);
+}
+#workerInspector {
+  min-width: 0;
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: 12px;
+}
+#workerTitle {
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+#workerMeta {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+#workerTabs {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+#workerTabs button {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 4px 0;
+  border-radius: 0;
+  font-size: 11px;
+}
+#workerTabs button[aria-pressed="true"] {
+  color: var(--vscode-foreground);
+  border-bottom-color: var(--vscode-focusBorder);
+}
+#workerContent {
+  font-family: var(--vscode-font-family);
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 340px;
+  overflow-y: auto;
+}

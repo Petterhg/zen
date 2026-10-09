@@ -11,6 +11,7 @@
     playbackContext,
     playbackSource,
     samplePlayback;
+  let workerNotices = [];
   let latestContextId;
   let closing = false;
   let finalUsage = false;
@@ -135,6 +136,15 @@
       )
         pendingStyle = undefined;
     }
+    if (workerNotices.length && delay === 0) {
+      const notice = workerNotices.shift();
+      sendEvent({
+        type: "session.thinking.append",
+        delegation_id: null,
+        content: notice.content,
+      });
+      if (workerNotices.length) passiveTimer = setTimeout(syncContext, 1000);
+    }
     if (ledger.pendingContext) return;
     urgentContext = false;
     if (
@@ -194,6 +204,7 @@
     playbackContext = undefined;
     samplePlayback = undefined;
     pendingReferences = undefined;
+    workerNotices = [];
     contextQuiet.reset();
     pendingStyle = undefined;
     clearTimeout(closeTimer);
@@ -781,7 +792,11 @@
       if (data.action === "end") stop();
     }
     if (data.type === "liveAppend" && data.sessionToken === sessionToken) {
-      if (
+      if (data.passiveKey === "workerCompletion" && data.mode === "thinking") {
+        workerNotices.push(data);
+        workerNotices = workerNotices.slice(-32);
+        syncContext();
+      } else if (
         data.passiveKey === "assistanceStyle" &&
         data.mode === "instructions"
       ) {
@@ -861,4 +876,110 @@
   });
   window.addEventListener("beforeunload", stop);
   post({ type: "ready" });
+
+  let workerRuns = [],
+    workerDetail,
+    selectedRun,
+    workerTab = "task";
+  function renderWorkerInspector() {
+    const run = workerDetail?.id === selectedRun ? workerDetail : undefined;
+    $("workerInspector").classList.toggle("hidden", !run);
+    if (!run) return;
+    $("workerTitle").textContent = run.agent.name;
+    $("workerMeta").textContent =
+      `${run.state} · ${run.mode} · ${run.agent.model} · ${run.agent.reasoningEffort}\n${run.id}`;
+    $("workerStop").classList.toggle(
+      "hidden",
+      !["running", "queued"].includes(run.state),
+    );
+    $("workerContent").textContent =
+      workerTab === "task"
+        ? `Delegated task\n${run.task}\n\nScope: ${run.scope ?? "Not specified"}\n\nSystem instructions (profile captured at launch)\n${run.instructions}`
+        : workerTab === "activity"
+          ? (run.activity
+              .map(
+                (a) =>
+                  `${new Date(a.time).toLocaleTimeString()} · ${a.tool}\n${JSON.stringify(a.arguments, null, 2)}${a.result ? "\n" + a.result : "\nStarted"}`,
+              )
+              .join("\n\n") || "No tool calls yet.") +
+            (run.omitted
+              ? `\n\n${run.omitted} older activity entries omitted.`
+              : "")
+          : (run.output ??
+            (run.state === "cancelled"
+              ? "Run cancelled."
+              : "Waiting for the worker’s report…"));
+    for (const button of $("workerTabs").querySelectorAll("button"))
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.tab === workerTab),
+      );
+  }
+  $("workerSettings").addEventListener("click", () =>
+    post({ type: "agentSettings" }),
+  );
+  $("workerStop").addEventListener("click", () => {
+    if (selectedRun) post({ type: "stopAgentRun", id: selectedRun });
+  });
+  $("workerTabs").addEventListener("click", (event) => {
+    const tab = event.target.closest("button")?.dataset.tab;
+    if (!tab) return;
+    workerTab = tab;
+    renderWorkerInspector();
+  });
+  window.addEventListener("message", ({ data }) => {
+    if (data.type === "agentAvailability") {
+      $("workerChoices").replaceChildren(
+        ...data.agents.map((agent) => {
+          const label = document.createElement("label"),
+            input = document.createElement("input"),
+            name = document.createElement("span");
+          input.type = "checkbox";
+          input.checked = agent.enabled;
+          input.addEventListener("change", () =>
+            post({ type: "toggleAgent", id: agent.id, enabled: input.checked }),
+          );
+          name.textContent = agent.name;
+          label.title = agent.description;
+          label.append(input, name);
+          return label;
+        }),
+      );
+    }
+    if (data.type === "agentRunDetail") {
+      workerDetail = data.run;
+      renderWorkerInspector();
+    }
+    if (data.type === "agentRuns") {
+      workerRuns = data.runs;
+      if (!workerRuns.length) workerNotices = [];
+      if (!workerRuns.some((r) => r.id === selectedRun)) {
+        selectedRun = workerRuns.at(-1)?.id;
+        workerDetail = undefined;
+        if (selectedRun) post({ type: "inspectAgentRun", id: selectedRun });
+      }
+      $("workerEmpty").classList.toggle("hidden", Boolean(workerRuns.length));
+      $("workerList").replaceChildren(
+        ...workerRuns
+          .slice()
+          .reverse()
+          .map((run) => {
+            const button = document.createElement("button");
+            button.className = "worker-row";
+            button.textContent = `${run.agent.name} · ${run.state} · ${run.id.slice(0, 6)}\n${run.task.slice(0, 100)}`;
+            button.setAttribute("aria-pressed", String(run.id === selectedRun));
+            button.addEventListener("click", () => {
+              selectedRun = run.id;
+              workerDetail = undefined;
+              post({ type: "inspectAgentRun", id: run.id });
+              for (const row of $("workerList").children)
+                row.setAttribute("aria-pressed", String(row === button));
+              renderWorkerInspector();
+            });
+            return button;
+          }),
+      );
+      renderWorkerInspector();
+    }
+  });
 })();

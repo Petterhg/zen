@@ -29,6 +29,13 @@ try {
     window.acquireVsCodeApi = () => ({
       postMessage(message) {
         window.messages.push(message);
+        if (message.type === "inspectAgentRun")
+          queueMicrotask(() =>
+            window.host({
+              type: "agentRunDetail",
+              run: window.workerFixtures?.find((r) => r.id === message.id),
+            }),
+          );
         if (message.type === "ready")
           window.host({
             type: "configuration",
@@ -481,6 +488,14 @@ try {
       end_ms: 500,
     });
     window.typingSentStart = window.sent.length;
+    window.host({
+      type: "liveAppend",
+      passiveKey: "workerCompletion",
+      mode: "thinking",
+      sessionToken: 1,
+      delegationId: null,
+      content: "API critic finished",
+    });
     for (const level of [50, 25, 0])
       window.host({
         type: "liveAppend",
@@ -544,7 +559,7 @@ try {
         .filter((e) => e.type === "session.thinking.append")
         .map((e) => e.content),
     ),
-    ["Focus after typing 10", "Verified names 10"],
+    ["API critic finished", "Focus after typing 10", "Verified names 10"],
   );
   await page.evaluate(() => {
     const event = window.sent.find(
@@ -898,6 +913,92 @@ try {
     "Switching modes must not reconnect voice",
   );
   assert.deepEqual(errors, []);
+  await page.evaluate(() => {
+    const profile = {
+      name: "API critic",
+      model: "fixture-model",
+      reasoningEffort: "medium",
+    };
+    window.host({
+      type: "agentAvailability",
+      agents: [
+        {
+          id: "critic",
+          name: "API critic",
+          description: "Use for API reviews",
+          enabled: true,
+        },
+      ],
+    });
+    window.workerFixtures = [
+      {
+        id: "run-1",
+        agent: profile,
+        state: "running",
+        mode: "background",
+        task: "Check compatibility <img src=x onerror=alert(1)>",
+        instructions: "Inspect API versions",
+        activity: [
+          {
+            time: Date.now(),
+            tool: "read_file",
+            arguments: { path: "api.ts" },
+            result: "function api() {}",
+          },
+        ],
+      },
+      {
+        id: "run-2",
+        agent: profile,
+        state: "completed",
+        mode: "foreground",
+        task: "Check callers",
+        instructions: "Find callers",
+        activity: [],
+        output: "Verified callers in client.ts:4",
+      },
+    ];
+    window.host({ type: "agentRuns", runs: window.workerFixtures });
+  });
+  assert.equal(await page.locator(".worker-row").count(), 2);
+  await page
+    .locator(".worker-row")
+    .filter({ hasText: "Check compatibility" })
+    .click();
+  assert.match(
+    await page.locator("#workerContent").textContent(),
+    /Inspect API versions/,
+  );
+  assert.equal(await page.locator("#workerContent img").count(), 0);
+  await page.locator('[data-tab="activity"]').click();
+  assert.match(await page.locator("#workerContent").textContent(), /api.ts/);
+  await page.locator("#workerStop").click();
+  assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {
+    type: "stopAgentRun",
+    id: "run-1",
+  });
+  await page
+    .locator(".worker-row")
+    .filter({ hasText: "Check callers" })
+    .click();
+  await page.locator('[data-tab="result"]').click();
+  assert.match(
+    await page.locator("#workerContent").textContent(),
+    /client.ts:4/,
+  );
+  assert.equal(await page.locator("#workerStop").isVisible(), false);
+  await page.locator("#workerMenu summary").click();
+  await page.locator("#workerChoices input").uncheck();
+  assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {
+    type: "toggleAgent",
+    id: "critic",
+    enabled: false,
+  });
+  await page.locator("#workerMenu summary").click();
+  await page.screenshot({
+    path: "artifacts/panel-subagents.png",
+    fullPage: true,
+  });
   console.log(
     "Panel lifecycle passed: hidden transcripts, research sources, editor-only proposals, context ack, mute matching, old-session isolation, close usage inline controls, typing/playback coalescing, and spoken-target refresh. Simulated transport; no microphone or provider calls.",
   );

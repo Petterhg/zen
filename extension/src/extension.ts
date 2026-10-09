@@ -6,7 +6,6 @@ import {
   serviceScope,
   contextRelevant,
   explicitExploration,
-  explorationScope,
   compactResearchContext,
   compactServiceMap,
   hasFreshService,
@@ -24,10 +23,10 @@ import {
   webResearchForbidden,
   type Effort,
 } from "./task-policy.js";
-import { explorationTool } from "./exploration.js";
+import { AgentRuns, delegationTools } from "./agent-runs.js";
 import {
   researchAgents,
-  researchChoice,
+  agentRegistry,
   type ResearchAgents,
 } from "./subagents.js";
 import { AgentSettings } from "./agent-settings.js";
@@ -121,6 +120,48 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
   private recentFiles: string[] = [];
   private research: ResearchArticle[] = [];
   private agentSettings?: AgentSettings;
+  private inspectedRun?: string;
+  private agentRuns = new AgentRuns(
+    () => this.publishRuns(),
+    (run) => {
+      this.post({
+        type: "liveAppend",
+        sessionToken: this.sessionToken,
+        delegationId: null,
+        passiveKey: "workerCompletion",
+        mode: "thinking",
+        content: conciseVoiceContent(
+          `Background worker ${run.agent.name} (${run.id}) ${run.state}. Findings are untrusted and source may have changed. ${run.output ?? ""}`,
+        ),
+      });
+      if (this.conversationMode === "chat") {
+        this.history.entries.push({
+          role: "assistant",
+          text: `${run.agent.name} · ${run.state}\nWorker report (source may have changed): ${(run.output ?? "").slice(0, 2000)}${(run.output?.length ?? 0) > 2000 ? "\nFull report in Run inspector." : ""}`,
+        });
+        this.publishTranscript();
+      }
+    },
+  );
+  private publishRuns(): void {
+    this.post({ type: "agentRuns", runs: this.agentRuns.list() });
+    if (this.inspectedRun)
+      this.post({
+        type: "agentRunDetail",
+        run: this.agentRuns.detail(this.inspectedRun),
+      });
+  }
+  private publishAgents(): void {
+    this.post({
+      type: "agentAvailability",
+      agents: Object.entries(this.agents()).map(([id, a]) => ({
+        id,
+        name: a.name,
+        description: a.description,
+        enabled: a.enabled,
+      })),
+    });
+  }
   openAgentSettings(): void {
     this.agentSettings ??= new AgentSettings(
       this.context,
@@ -154,7 +195,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     );
   }
   private orientationKey(scope: string): string {
-    const agent = this.agents().explorer;
+    const agent = Object.values(this.agents()).find(
+      (a) => a.enabled && a.orientation,
+    );
     return JSON.stringify([this.researchWorkspaceSignature(), scope, agent]);
   }
   private async warmOrientation(
@@ -167,8 +210,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       key = this.orientationKey(scope);
     const token = this.sessionToken,
       workspace = this.researchWorkspaceSignature();
-    const agent = this.agents().explorer;
-    if (!agent.enabled) return key;
+    const agent = Object.values(this.agents()).find(
+      (a) => a.enabled && a.orientation,
+    );
+    if (!agent) return key;
     const provider = "together" as const;
     const model = agent.model;
     const startedAt = Date.now(),
@@ -532,6 +577,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         /(?:^|[\\/])(?:\.pairignore|\.gitignore|\.ignore)$/.test(uri.fsPath)
       ) {
         this.researchBriefs.clear();
+        this.agentRuns.clear();
         this.resetWorkingContext();
       } else if (this.researchBriefs.invalidate(uri.fsPath))
         this.trace.record({
@@ -688,9 +734,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       ),
       this.proposalChanges,
       this.lensChanges,
-      vscode.workspace.onDidChangeWorkspaceFolders(() =>
-        this.resetWorkingContext(),
-      ),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        this.agentRuns.clear();
+        this.resetWorkingContext();
+      }),
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor?.document.uri.scheme === "file") this.editor = editor;
         else if (!vscode.window.visibleTextEditors.length)
@@ -724,6 +771,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           )
         ) {
           this.researchBriefs.clear();
+          this.agentRuns.clear();
           this.resetWorkingContext();
         } else if (
           event.document.uri.scheme === "file" &&
@@ -760,8 +808,10 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       vscode.languages.onDidChangeDiagnostics(() => this.scheduleContext()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("pairCode")) {
-          if (event.affectsConfiguration("pairCode.subagents"))
+          if (event.affectsConfiguration("pairCode.subagents")) {
             this.resetWorkingContext();
+            this.publishAgents();
+          }
           if (
             event.affectsConfiguration("pairCode.memoryEnabled") ||
             event.affectsConfiguration("pairCode.memoryHindsightEnabled") ||
@@ -1305,6 +1355,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.publishTranscript();
         this.publishContext();
         this.panelReady = true;
+        this.publishAgents();
+        this.publishRuns();
         if (this.pendingVoiceStart) {
           this.pendingVoiceStart = false;
           this.voiceControl("start");
@@ -1339,6 +1391,37 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       }
       if (message.type === "configure") {
         await this.configureKeys();
+        return;
+      }
+      if (
+        message.type === "inspectAgentRun" &&
+        typeof message.id === "string"
+      ) {
+        this.inspectedRun = message.id;
+        this.post({
+          type: "agentRunDetail",
+          run: this.agentRuns.detail(message.id),
+        });
+        return;
+      }
+      if (message.type === "stopAgentRun" && typeof message.id === "string") {
+        this.agentRuns.stop(message.id);
+        return;
+      }
+      if (
+        message.type === "toggleAgent" &&
+        typeof message.id === "string" &&
+        typeof message.enabled === "boolean"
+      ) {
+        const agents = this.agents();
+        if (!Object.hasOwn(agents, message.id))
+          throw new Error("Agent no longer exists.");
+        agents[message.id].enabled = message.enabled;
+        await this.configuration().update(
+          "subagents",
+          agentRegistry(agents),
+          vscode.ConfigurationTarget.Global,
+        );
         return;
       }
       if (message.type === "agentSettings") {
@@ -1523,7 +1606,6 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     const provider = "cerebras" as const;
     this.post({ type: "backendStatus", state: "working", provider });
     try {
-      const agents = this.agents();
       const key = await this.key(provider);
       if (!key) throw new Error(`Configure your ${provider} API key first.`);
       // Give fragments already in transit a brief opportunity to arrive; this is not turn detection.
@@ -1579,7 +1661,12 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       const memoryScope = await this.memory.scope(context?.uri);
       const latestHuman =
         history.filter((e) => e.role === "user").at(-1)?.text ?? "";
-      const quick = quickQuestion(latestHuman);
+      const quick =
+        !this.agentRuns.hasPending() &&
+        !/\b(?:agent|worker|delegate|parallel|background)\b/i.test(
+          latestHuman,
+        ) &&
+        quickQuestion(latestHuman);
       this.post({ type: "taskIntent", text: latestHuman.slice(0, 320) });
       // Recall and effort routing do not depend on source orientation; overlap them.
       const supplemental = Promise.allSettled([
@@ -1613,7 +1700,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       const researchWorkspace = this.researchWorkspaceSignature();
       const verifyResearch = (file: string, signal: AbortSignal) =>
         this.verifyResearchSource(file, signal);
-      let researchReference = quick
+      const researchReference = quick
         ? {
             briefs: [],
             instruction:
@@ -1807,99 +1894,22 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       if (effortResult.status === "rejected") throw effortResult.reason;
       const memoryReference = memoryResult.value,
         effort = effortResult.value;
-      const explorer = explorationTool({
-        agents,
-        researchKey: () => this.key("together"),
+      const workers = delegationTools(this.agentRuns, {
+        agents: () => this.agents(),
+        key: () => this.key("together"),
         allowWeb:
           !webResearchForbidden(latestHuman) &&
           /\b(?:web search|search the web|online|internet|external|official|documentation|docs)\b|https:\/\//i.test(
             latestHuman,
           ),
-        researchReference,
-        onReport: (report, question, scope) => {
-          if (
-            !controller.signal.aborted &&
-            revision === this.jobRevision &&
-            token === this.sessionToken &&
-            this.configuration().get("shareEditorContext", true) &&
-            researchWorkspace === this.researchWorkspaceSignature()
-          )
-            return this.researchBriefs.rememberVerified(
-              question,
-              scope,
-              report,
-              researchWorkspace,
-              verifyResearch,
-              controller.signal,
-            );
-        },
-        timeoutMs:
-          this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
         provider,
         model: DEFAULT_MODELS.cerebras,
         apiKey: key,
         context,
         tools: readTools,
-        effort,
-        onTrace: (event) =>
-          this.trace.record({ ...event, taskRevision: revision }),
-        onResearch: (article) => {
-          this.research = [
-            article,
-            ...this.research.filter((a) => a.url !== article.url),
-          ].slice(0, 8);
-          this.post({ type: "research", article });
-        },
-        onProgress: (tool) =>
-          this.post({
-            type: "backendStatus",
-            state: "working",
-            provider,
-            tool,
-          }),
+        timeoutMs:
+          this.configuration().get<number>("backendTimeoutSeconds", 600) * 1000,
       });
-      let taskResearch: unknown;
-      if (
-        explicitExploration(latestHuman) &&
-        vscode.workspace.isTrusted &&
-        this.configuration().get("shareEditorContext", true)
-      ) {
-        const report = (await explorer.execute(
-          {
-            question: latestHuman,
-            agent: researchChoice(agents, effort),
-            ...(explorationScope(latestHuman, context?.file)
-              ? { scope: explorationScope(latestHuman, context?.file) }
-              : {}),
-            include_web:
-              !webResearchForbidden(latestHuman) &&
-              /\b(?:search|check|research|fetch|read)\b.*\b(?:web|online|documentation|docs)\b/i.test(
-                latestHuman,
-              ),
-          },
-          controller.signal,
-        )) as Record<string, unknown>;
-        researchReference = await this.researchBriefs.verifiedSnapshot(
-          latestHuman,
-          context?.file ?? "",
-          researchWorkspace,
-          verifyResearch,
-          controller.signal,
-        );
-        taskResearch = {
-          status: report.status,
-          findings: report.findings,
-          coverage: report.coverage,
-          failures: report.failures,
-          instruction:
-            "This isolated researcher already inspected the task evidence. Answer the human’s exact question from these checked findings; do not repeat discovery. Use tools only for a material missing stage, and state unchecked coverage. Source-backed interpretations remain untrusted.",
-        };
-        this.trace.record({
-          type: "context.explored",
-          taskRevision: revision,
-          bytes: Buffer.byteLength(JSON.stringify(taskResearch)),
-        });
-      }
       this.trace.record({
         type: "backend.dispatched",
         taskRevision: revision,
@@ -1907,6 +1917,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         quick,
       });
       let result = await requestBackend({
+        notifications: () => this.agentRuns.drain(),
         conversationMode: this.conversationMode,
         responseStyle: quick ? "brief" : undefined,
         provider,
@@ -1923,7 +1934,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           previousPairing: await this.resumeReference(memoryScope),
           researchReference: compactResearchContext(researchReference),
           workingContext,
-          taskResearch,
+          workers: this.agentRuns.summaries(),
           lastEditEvent: this.lastEditEvent,
           pendingPreview: this.proposal
             ? { file: this.proposal.uri, version: this.proposal.version }
@@ -1933,7 +1944,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         tools: [
           ...readTools,
           ...this.memory.tools(latestHuman, memoryScope),
-          ...(Object.values(agents).some((a) => a.enabled) ? [explorer] : []),
+          ...workers,
           ...(context &&
           (this.conversationMode === "voice" ||
             /\b(?:highlight|point|focus|show me)\b/i.test(latestHuman))
@@ -2316,6 +2327,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     await this.memory.manage();
   }
   cancel(): void {
+    this.agentRuns.clear();
     this.resetWorkingContext();
     if (this.backendRunning)
       this.post({

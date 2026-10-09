@@ -13,7 +13,10 @@ try {
     });
   });
   // Load actual assets with a simulated host; no network or model calls.
-  await page.goto("about:blank");
+  await page.route("https://agents.test/**", (route) =>
+    route.fulfill({ body: "<html></html>", contentType: "text/html" }),
+  );
+  await page.goto("https://agents.test/");
   await page.evaluate(() => {
     window.messages = [];
     window.acquireVsCodeApi = () => ({
@@ -36,12 +39,20 @@ try {
   ]);
   const agents = {
     explorer: {
+      name: "Explorer",
+      description: "Discovery",
+      mode: "foreground",
+      orientation: true,
       enabled: true,
       model: "deepseek-ai/DeepSeek-V4.1-Flash",
       reasoningEffort: "medium",
       instructions: "Source-backed discovery and summaries.",
     },
     deep_research: {
+      name: "Deep research",
+      description: "Complex questions",
+      mode: "background",
+      orientation: false,
       enabled: true,
       model: "deepseek-ai/DeepSeek-V4-Pro-0813",
       reasoningEffort: "high",
@@ -77,6 +88,7 @@ try {
     await page.locator("#explorer-instructions").inputValue(),
     /Use tests first/,
   );
+  await page.locator('[data-agent="deep_research"] summary').click();
   await page.locator("#deep_research-enabled").uncheck();
   await page.locator("#save").click();
   const saved = await page.evaluate(() => window.messages.at(-1));
@@ -97,6 +109,21 @@ try {
   assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), {
     type: "configureKeys",
   });
+  await page.locator("#add").click();
+  assert.equal(await page.locator(".profile").count(), 3);
+  const custom = page.locator(".profile").last();
+  await custom.locator('input[id$="-name"]').fill("API critic");
+  await custom
+    .locator('textarea[id$="-description"]')
+    .fill("Use when reviewing API compatibility");
+  await custom.locator('select[id$="-mode"]').selectOption("background");
+  await page.locator("#save").click();
+  const created = await page.evaluate(() => window.messages.at(-1));
+  assert.equal(Object.keys(created.agents).length, 3);
+  assert.equal(Object.values(created.agents).at(-1).name, "API critic");
+  assert.equal(Object.values(created.agents).at(-1).mode, "background");
+  await custom.getByRole("button", { name: "Delete", exact: true }).click();
+  assert.equal(await page.locator(".profile").count(), 2);
   // Visual checks use actual page/assets at both desktop and narrow widths.
   await page.evaluate(
     (data) => window.dispatchEvent(new MessageEvent("message", { data })),

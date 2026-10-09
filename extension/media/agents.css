@@ -70,6 +70,7 @@ input[type="checkbox"] {
   gap: 16px;
   margin: 20px 0 16px;
 }
+input:not([type="checkbox"]),
 select,
 textarea {
   display: block;
@@ -134,4 +135,38 @@ button:disabled {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+.profile > label {
+  margin-top: 16px;
+}
+#add {
+  margin-top: 24px;
+}
+.profile input[type="checkbox"] {
+  margin-left: 12px;
+}
+.profile-heading h2 {
+  overflow-wrap: anywhere;
+}
+
+.profile-heading {
+  cursor: pointer;
+}
+.profile-heading button {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  padding: 4px 8px;
+}
+.profile-heading h2::before {
+  content: "›";
+  display: inline-block;
+  width: 18px;
+  color: var(--vscode-descriptionForeground);
+}
+.profile[open] .profile-heading h2::before {
+  content: "⌄";
+}
+.profile > summary {
+  list-style: none;
 }

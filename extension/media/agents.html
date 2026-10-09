@@ -27,89 +27,28 @@
       </section>
       <p id="keyStatus" class="note" role="status"></p>
       <form id="profiles">
-        <section class="profile" data-agent="explorer">
-          <div class="profile-heading">
-            <div>
-              <h2>Explorer</h2>
-              <p>
-                Service discovery, file relationships and concise source
-                summaries.
-              </p>
-            </div>
-            <label class="enabled"
-              ><input type="checkbox" id="explorer-enabled" />Enabled</label
-            >
-          </div>
-          <div class="fields">
-            <label>Model<select id="explorer-model"></select></label
-            ><label
-              >Reasoning<select id="explorer-effort">
-                <option value="none">Off</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select></label
-            >
-          </div>
-          <label
-            >Instructions<textarea
-              id="explorer-instructions"
-              maxlength="8000"
-              rows="4"
-              spellcheck="false"
-            ></textarea>
-          </label>
-        </section>
-        <section class="profile" data-agent="deep_research">
-          <div class="profile-heading">
-            <div>
-              <h2>Deep research</h2>
-              <p>
-                Complex architecture, cross-service reasoning and subtle failure
-                modes.
-              </p>
-            </div>
-            <label class="enabled"
-              ><input
-                type="checkbox"
-                id="deep_research-enabled"
-              />Enabled</label
-            >
-          </div>
-          <div class="fields">
-            <label>Model<select id="deep_research-model"></select></label
-            ><label
-              >Reasoning<select id="deep_research-effort">
-                <option value="none">Off</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select></label
-            >
-          </div>
-          <label
-            >Instructions<textarea
-              id="deep_research-instructions"
-              maxlength="8000"
-              rows="4"
-              spellcheck="false"
-            ></textarea>
-          </label>
-        </section>
+        <div id="agentList"></div>
+        <button id="add" type="button">＋ New subagent</button>
         <p class="note">
-          These agents use Together AI and can only inspect permitted source.
-          Web research requires an explicit request. Instructions cannot enable
-          writes, shell access or recursive delegation.
+          The main agent chooses workers using their names and descriptions.
+          Instructions define the job. Foreground waits for a result; background
+          lets pairing continue and sends a quiet completion notice. Independent
+          tasks can run in parallel.
         </p>
         <p class="note">
-          Off disables thinking. Low, Medium and High guide reasoning depth
-          through instructions; they are not hard compute limits on these
-          models. Background service orientation uses Explorer. Cerebras can
-          request either profile; high-complexity explicit exploration defaults
-          to Deep research.
+          Workers currently use permitted read-only code tools and explicitly
+          requested web research. They return findings to the main agent for any
+          inline edits. Instructions do not grant shell, writes, integrations or
+          recursive delegation.
+        </p>
+        <p class="note">
+          Off disables thinking. Other reasoning levels guide depth through
+          prompts, not hard compute limits. Automatic service orientation is
+          optional and uses the agent you select above.
         </p>
         <div class="actions">
-          <button id="save" type="submit" disabled>Save changes</button>
+          <button id="save" type="submit" disabled>Save changes</button
+          ><button id="reload" type="button">Reload saved</button>
           <p id="status" role="status" aria-live="polite"></p>
         </div>
       </form>
