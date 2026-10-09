@@ -80,7 +80,7 @@ applyRuntimeShell(resources);
 const plist = path.join(app, "Contents/Info.plist");
 for (const [key, value] of Object.entries({
   CFBundleDisplayName: "Zen",
-  CFBundleName: "Zen",
+  CFBundleName: "VSCodium",
   CFBundleIdentifier: "dev.paircode.editor",
   NSMicrophoneUsageDescription:
     "Pair Code uses your microphone during a voice pairing session.",

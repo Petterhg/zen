@@ -338,4 +338,8 @@ The generated masters, small header asset and ICNS are checked in. Regenerate pl
 
 Validation: 140 tests and the full type/lint/build/browser/prototype suite passed. Light/dark fixtures render the header plus 160px, 64px and 32px app icons. A disposable clone of the pinned macOS app accepted the overlay, declared Zen.icns and passed deep/strict codesign verification. The active editor and Dock were not restarted.
 
-The macOS overlay also removes the upstream CFBundleIconName asset-catalog override, which otherwise wins over Zen.icns, and sets both bundle display-name fields to Zen. Electron package.name and the bundle identifier remain unchanged to preserve the existing application/SecretStorage namespace.
+The macOS overlay also removes the upstream CFBundleIconName asset-catalog override, which otherwise wins over Zen.icns, and sets CFBundleDisplayName to Zen while preserving CFBundleName as VSCodium. Electron package.name and the bundle identifier remain unchanged to preserve the existing application/SecretStorage namespace.
+
+Startup correction: Electron resolves its pinned VSCodium Helper bundles using CFBundleName. Renaming that internal field caused a fatal “Unable to find helper app” before the editor started, despite passing signature verification. The overlay now repairs that field to VSCodium; display branding and icon remain Zen. Native startup must be checked separately from signing integrity.
+
+Repair validation: the actual repaired runtime launched successfully with a temporary profile, reached main-process idle, started its extension host and remained alive through the startup check before the test process was closed. Full validation passed (140 tests plus browser/prototype checks); the local runtime was repaired without resetting the normal user profile.

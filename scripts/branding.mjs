@@ -20,15 +20,19 @@ export function applyRuntimeIcon(resources) {
   let next = plist
     .replace(iconKey, "$1Zen.icns$2")
     .replace(/\s*<key>CFBundleIconName<\/key>\s*<string>[^<]*<\/string>/g, "");
-  for (const key of ["CFBundleDisplayName", "CFBundleName"]) {
+  for (const [key, value] of [
+    ["CFBundleDisplayName", "Zen"],
+    ["CFBundleName", "VSCodium"],
+  ]) {
     const field = new RegExp(`(<key>${key}</key>\\s*<string>)[^<]*(</string>)`);
-    if (field.test(next)) next = next.replace(field, "$1Zen$2");
+    if (field.test(next)) next = next.replace(field, `$1${value}$2`);
     else
       next = next.replace(
         "<dict>",
-        `<dict>\n<key>${key}</key><string>Zen</string>`,
+        `<dict>\n<key>${key}</key><string>${value}</string>`,
       );
   }
+  // CFBundleName must match the pinned VSCodium Helper executables.
   // Keep Electron package.name and the bundle identifier unchanged: existing
   // SecretStorage uses that application identity, independently of display branding.
 

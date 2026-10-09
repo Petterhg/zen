@@ -107,7 +107,7 @@ test("macOS branding installs a valid icon idempotently without changing bundle 
   const plist = join(contents, "Info.plist");
   writeFileSync(
     plist,
-    "<plist><dict><key>CFBundleIconFile</key><string>VSCodium.icns</string><key>CFBundleIconName</key><string>VSCodium</string><key>CFBundleName</key><string>VSCodium</string><key>CFBundleDisplayName</key><string>Pair Code</string><key>CFBundleIdentifier</key><string>dev.paircode.editor</string></dict></plist>",
+    "<plist><dict><key>CFBundleIconFile</key><string>VSCodium.icns</string><key>CFBundleIconName</key><string>VSCodium</string><key>CFBundleName</key><string>Zen</string><key>CFBundleDisplayName</key><string>Pair Code</string><key>CFBundleIdentifier</key><string>dev.paircode.editor</string></dict></plist>",
   );
   const moduleUrl = new URL("../scripts/branding.mjs", import.meta.url).href;
   const apply = () =>
@@ -123,8 +123,8 @@ test("macOS branding installs a valid icon idempotently without changing bundle 
       icon = readFileSync(join(contents, "Resources/Zen.icns"));
     assert.match(first, /<string>Zen.icns<\/string>/);
     assert.match(first, /dev.paircode.editor/);
-    assert.doesNotMatch(first, /CFBundleIconName|VSCodium|Pair Code/);
-    assert.match(first, /<key>CFBundleName<\/key><string>Zen<\/string>/);
+    assert.doesNotMatch(first, /CFBundleIconName|Pair Code/);
+    assert.match(first, /<key>CFBundleName<\/key><string>VSCodium<\/string>/);
     assert.equal(icon.subarray(0, 4).toString(), "icns");
     assert.equal(icon.readUInt32BE(4), icon.length);
     apply();
