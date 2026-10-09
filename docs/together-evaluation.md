@@ -1,0 +1,34 @@
+# Together AI model evaluation
+
+The first step is evaluation, not replacing the latency-sensitive pairing backend. The requested models are `deepseek-ai/DeepSeek-V4.1-Flash` and `zai-org/GLM-5.3-Flash`. Together's [serverless catalog](https://docs.together.ai/docs/serverless/models) lists both with function calling and structured outputs; successful account access and model behavior still need live verification. API availability and documented limits can change.
+
+## Keys and running
+
+Use the application's `.env`, created locally from `.env.example`, with `TOGETHER_API_KEY=...`. It is ignored by Git. The standalone command reads only this key, from the process environment first, then that fixed application file; an explicit developer key-file argument is allowed. It does not read a repository opened in Zen or use editor SecretStorage. Use owner-only file permissions (`chmod 600 .env`) and never paste keys into chat, source, settings or reports.
+
+```sh
+npm run eval:together
+# For an isolated development worktree using your main clone's key file:
+npm run eval:together -- /absolute/path/to/zen/.env
+```
+
+Existing OpenAI/Groq/Cerebras/Firecrawl keys may be in a previous prototype's `.env`; clone/move operations do not migrate ignored files. In the editor, encrypted SecretStorage overrides launch environment variables, which override the application's development `.env`. Keys entered in Add API Keys belong to the runtime profile and are not exported into `.env`. The developer evaluation command cannot extract them.
+
+## What is measured
+
+The dependency-free HTTP harness follows Together's [chat completions API](https://docs.together.ai/reference/chat-completions), [structured outputs](https://docs.together.ai/docs/inference/chat/structured-outputs), and [tool calling](https://docs.together.ai/docs/inference/function-calling/overview). Four built-in synthetic cases exercise:
+
+- A concise current-file explanation.
+- A cited service summary with explicit unknowns.
+- A cancellation review containing a deliberate `continue` bug.
+- One forced fixture read and a matching tool-result follow-up.
+
+The tool case is a protocol compatibility check, not proof of autonomous exploration quality. Tool arguments must name the requested synthetic file; no disk reads, commands or writes are possible. JSON summaries require known paths and in-range lines, but valid citations do not prove correct interpretation. Inspect answers for actual dependency flow, missing failure handling and the cancellation bug's consequence.
+
+Each model makes at most five calls in one run. The explicit evaluation cap is 4,096 output tokens per call with a 120-second network deadline; reasoning can consume that budget, so truncation is reported as failure, never a successful partial answer. There are no automatic retries or silent model substitutions. Authentication failure stops further requests. Reasoning settings stay at the provider default because model-specific support is not inferred from generic docs. This cap does not change the application's research budgets or context handling.
+
+Ignored, owner-only `artifacts/together/*.json` reports contain complete-request duration, finish reason, token usage, final answer and checks. No prompts from private repositories, credentials, provider error bodies or reasoning text are stored. Thinking fields may be preserved in a tool wire roundtrip when a model returns them, but never appear in the report. Timings are neither first-token nor audible-voice latency, and one run cannot establish average performance, production reliability or a quality ranking.
+
+## Intended next step
+
+If live results are useful, add an explicitly configurable research provider/model for the existing isolated explorer and service-card synthesis, leaving fast foreground pairing on its current backend. Feed compact verified findings back to that backend/speaker; do not let large raw research conversations fill the pairing context. Evaluate the same synthetic cases with existing backends before choosing a default. Dedicated review agents remain deferred; the review fixture evaluates reasoning capability only. Together selection, automatic escalation, full native-tool integration and human voice validation are not implemented by this harness.

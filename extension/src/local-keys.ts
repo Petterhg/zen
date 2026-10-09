@@ -12,6 +12,7 @@ export async function localKey(
       "GROQ_API_KEY",
       "CEREBRAS_API_KEY",
       "FIRECRAWL_API_KEY",
+      "TOGETHER_API_KEY",
     ].includes(name)
   )
     return undefined;

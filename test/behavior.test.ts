@@ -302,8 +302,15 @@ test("local .env loading is whitelisted and public page tools reject private des
   const temp = await mkdtemp(path.join(tmpdir(), "pair-keys-"));
   const file = path.join(temp, ".env");
   try {
-    await writeFile(file, 'OPENAI_API_KEY="test-only"\nNODE_OPTIONS=bad\n');
+    await writeFile(
+      file,
+      'OPENAI_API_KEY="test-only"\nTOGETHER_API_KEY="together-test-only"\nNODE_OPTIONS=bad\n',
+    );
     assert.equal(await localKey(file, "OPENAI_API_KEY"), "test-only");
+    assert.equal(
+      await localKey(file, "TOGETHER_API_KEY"),
+      "together-test-only",
+    );
     assert.equal(await localKey(file, "NODE_OPTIONS"), undefined);
   } finally {
     await rm(temp, { recursive: true, force: true });

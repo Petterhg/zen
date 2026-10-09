@@ -27,6 +27,8 @@ In the right workboard, open **Pairing settings** (⚙), choose **Add API Keys**
 
 Press **Start Pairing** and allow the microphone. The session keeps listening while you type and navigate, until you mute or disconnect. Routine typing and cursor updates are coalesced and held while Pair is speaking; a spoken request refreshes the latest focus immediately. The microphone stays live for natural spoken interruptions. Starting a session requires a click and microphone permission; the app does not silently start capture at launch. Muting keeps the session connected and billable; disconnect ends it.
 
+To evaluate Together AI separately, add `TOGETHER_API_KEY` to the application's ignored `.env`, then run `npm run eval:together`. An explicit key-file path is supported: `npm run eval:together -- /absolute/path/to/.env`. This developer command tests `deepseek-ai/DeepSeek-V4.1-Flash` and `zai-org/GLM-5.3-Flash` on built-in synthetic code: short explanation, source-backed service summary, cancellation review and a read-only tool roundtrip. It sends no workspace files, reads no SecretStorage and does not change the running assistant or defaults. Reports live under ignored `artifacts/together/`; protocol/structure checks are separate from human assessment of answer correctness. [Evaluation details and intended routing](docs/together-evaluation.md).
+
 Try selecting the function in `demo/pairing.ts` and saying “Simplify this without changing the behavior.” You can also type in the panel, or use **⌘⌥I**. Proposed code appears directly in the file as a native multiline inline preview, with **Accept** and **Reject** controls above the target. **⌘Enter** accepts a proposal and ordinary **⌘Z** undoes it. If you edit the file after generation, the proposal becomes stale and cannot overwrite your newer work.
 
 Use the **Inline suggestions** control to choose Off, On request (default), or Automatic. *_⌥\*_ requests an insertion at the cursor; use the editor’s normal Tab acceptance and Escape dismissal. Inline suggestions are canceled when the context changes. Voice-requested insertions and replacements still require explicit proposal acceptance, even with predictions turned off. Empty files are supported: an insertion is anchored at the captured cursor.
@@ -66,7 +68,7 @@ These features are implemented in the prototype; this is not a production-readin
 | Text chat           | Optional Chat / transcript view with bottom composer; direct backend requests, complete cited answers, microphone disconnected, shared tools and inline previews.                                                            |
 | Session resume      | Local repository checkpoints, top-level Continue conversation/Start new controls, historical edit outcomes and current-file revalidation. Microphone startup stays manual.                                                   |
 | Personal memory     | Automatic backend retention, private inspect/correct/forget/pause controls, source freshness checks and optional authenticated local Hindsight. [Setup and limits](docs/personal-memory.md).                                 |
-| Development setup   | Contributor setup, CI, agent instructions, focused skills, and mapper/implementer/reviewer profiles.                                                                                                                         |
+| Development setup   | Contributor setup, CI, agent instructions, focused skills, mapper/implementer/reviewer profiles, and a synthetic Together model evaluation command (separate from the editor backend).                                       |
 
 ## Roadmap
 
@@ -80,6 +82,7 @@ Ordered by current priority, not promised release dates. Completed work moves in
 - [ ] Recognize completed human edits from current buffers and diagnostics, and continue without stale instructions.
 - [x] Trigger bounded context orientation on unfamiliar-file questions; silently prepare another service after focus dwell and reuse checked cards across sessions.
 - [ ] Evaluate scoped retrieval and impact analysis on real coding questions: definitions, references, imports and tests alongside semantic matches. Measure missed evidence and latency, and report incomplete coverage honestly. Native checks cover automatic orientation and warm reuse on a real monorepo; deeper impact analysis remains variable and sometimes slow. Keep evaluating repeated discovery and source-backed interpretation errors; citations alone do not prove correctness.
+- [ ] Evaluate Together DeepSeek V4.1 Flash and GLM-5.3 Flash for isolated exploration and synthesis, then add configurable research-model routing if quality/latency justify it. The synthetic evaluation harness is implemented; Together is not yet a selectable editor backend. Keep fast conversational defaults until measured evidence supports a change.
 - [ ] Repair Python environment discovery and keep formatting, linting and inline proposals dependable.
 - [ ] Close the local validation loop after edits with diagnostics and explicitly authorized formatter/test execution.
 

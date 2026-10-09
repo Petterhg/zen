@@ -20,7 +20,8 @@
     "validate": "npm run check && npm run lint && npm run build && npm test && npm run test:panel && npm run test:prototype",
     "prototype:zen": "node scripts/serve-prototype.mjs",
     "test:prototype": "node scripts/test-prototype.mjs",
-    "memory:serve": "node scripts/memory-serve.mjs"
+    "memory:serve": "node scripts/memory-serve.mjs",
+    "eval:together": "node --import tsx scripts/eval-together.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
