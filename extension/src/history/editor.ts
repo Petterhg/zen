@@ -525,6 +525,8 @@ export class EditorHistory implements vscode.Disposable {
             requestId: captured.requestId,
             changeSetId: change.id,
             beforeVersion: doc.version,
+            beforeDigest: evidenceDigest(item.before),
+            afterDigest: evidenceDigest(item.after),
             body: sanitizeEvidence({ expectedText: item.after }),
           });
         }
@@ -555,6 +557,7 @@ export class EditorHistory implements vscode.Disposable {
               changeSetId: change.id,
               beforeVersion: item.version,
               version: item.afterVersion,
+              afterDigest: verified ? evidenceDigest(item.text) : undefined,
               body: verified
                 ? sanitizeEvidence({ text: item.text })
                 : undefined,
@@ -759,7 +762,7 @@ export class EditorHistory implements vscode.Disposable {
       localActorId: this.context.globalState.get("history.localActor"),
       identity: "local device claim; not an authenticated person",
       coverage:
-        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. Delegated worker lifecycle and existing-file change-set acceptance. No worker line blame, new/deleted-file proof, Git mappings, sharing, playback proof or hidden reasoning.",
+        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. Delegated worker lifecycle and existing-file change-set acceptance. Bounded verified worker text lineage. No cross-session worker blame, new/deleted-file proof, Git mappings, sharing, playback proof or hidden reasoning.",
       files: [
         ...new Set(
           allowed
@@ -809,14 +812,25 @@ export class EditorHistory implements vscode.Disposable {
       this.journal.repositoryId,
       this.context.secrets,
     );
+    const permittedRecords: HistoryRecord[] = [];
+    const paths = new Map<string, boolean>();
+    for (const record of records) {
+      if (typeof record.data.file !== "string") continue;
+      if (!paths.has(record.data.file))
+        paths.set(record.data.file, await this.permitted(record.data.file));
+      if (paths.get(record.data.file)) permittedRecords.push(record);
+    }
     const reasons = explainSelection(
-      records,
+      permittedRecords,
       this.journal.id,
       file,
       text,
       start,
       end,
     );
+    // Linked task/model metadata can live on another file's anchor. Revoke it too.
+    for (const [linkedPath, allowed] of paths)
+      if (allowed && !(await this.permitted(linkedPath))) return;
     // Capture the target once; navigation never retargets this inspection.
     if (
       document.isClosed ||
@@ -832,6 +846,10 @@ export class EditorHistory implements vscode.Disposable {
     this.inspections.set(this.inspectionUri.toString(), this.inspection);
     const view = await vscode.workspace.openTextDocument(this.inspectionUri);
     if (document.version !== version || !(await this.permitted(file))) {
+      this.clearInspection();
+      return;
+    }
+    if (document.version !== version || !this.enabled()) {
       this.clearInspection();
       return;
     }

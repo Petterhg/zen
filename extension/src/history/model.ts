@@ -1,9 +1,13 @@
+import { evidenceDigest } from "./evidence.js";
+import { replacementLineage } from "./lineage.js";
 export interface Origin {
   writer: "human" | "ai" | "editor_unknown" | "imported";
   operation: string;
   eventId?: string;
   proposalId?: string;
   requestId?: string;
+  runId?: string;
+  changeSetId?: string;
 }
 export interface Span {
   start: number;
@@ -119,6 +123,57 @@ export function projectFile(
     if (event.type !== "document.changed") continue;
     const text = String(event.data.beforeText);
     if (!state || state.text !== text) state = baseline(text);
+    const worker = local.find(
+      (r) =>
+        r.type === "worker.change-accepted" &&
+        typeof r.data.runId === "string" &&
+        typeof r.data.changeSetId === "string" &&
+        typeof r.data.requestId === "string" &&
+        Number(event.data.version) === Number(event.data.beforeVersion) + 1 &&
+        r.sequence > event.sequence &&
+        r.data.version === event.data.version &&
+        r.data.beforeVersion === event.data.beforeVersion &&
+        r.data.afterDigest === evidenceDigest(event.data.text) &&
+        !local.some(
+          (between) =>
+            between.sequence > event.sequence &&
+            between.sequence < r.sequence &&
+            ["document.changed", "document.baseline"].includes(between.type),
+        ),
+    );
+    const prepared =
+      worker &&
+      local.find(
+        (r) =>
+          r.type === "worker.change-prepared" &&
+          r.sequence < event.sequence &&
+          r.data.changeSetId === worker.data.changeSetId &&
+          r.data.runId === worker.data.runId &&
+          r.data.requestId === worker.data.requestId &&
+          r.data.beforeVersion === event.data.beforeVersion &&
+          r.data.beforeDigest === evidenceDigest(text) &&
+          r.data.afterDigest === worker.data.afterDigest,
+      );
+    if (worker && prepared) {
+      const lineage = replacementLineage(text, String(event.data.text));
+      state = applyEdits(state, lineage.edits, {
+        writer: lineage.certain ? "ai" : "editor_unknown",
+        operation: lineage.certain
+          ? "accepted-worker-text-diff"
+          : "ambiguous-worker-text-diff",
+        eventId: event.id,
+        ...(lineage.certain
+          ? {
+              runId: String(worker.data.runId),
+              changeSetId: String(worker.data.changeSetId),
+              requestId: String(worker.data.requestId),
+            }
+          : {}),
+      });
+      if (state.text !== event.data.text)
+        throw new Error("Worker lineage does not match observed buffer.");
+      continue;
+    }
     const acceptance = accepted.get(event.data.version);
     const proposal = acceptance && proposals.get(acceptance.proposalId);
     const origin: Origin =

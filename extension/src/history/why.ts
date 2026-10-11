@@ -8,6 +8,8 @@ export interface ChangeReason {
   observedAt?: string;
   request?: string;
   rationale?: string;
+  worker?: string;
+  parentRequest?: string;
   attempts: {
     id: string;
     model?: string;
@@ -49,19 +51,42 @@ export function explainSelection(
       ? local.find(
           (r) =>
             r.type === "request.observed" &&
-            r.data.file === file &&
+            (span.origin.runId || r.data.file === file) &&
             r.data.requestId === span.origin.requestId,
         )
       : undefined;
-    const ids = Array.isArray(proposal?.data.invocationIds)
-      ? proposal.data.invocationIds.filter(
-          (id): id is string => typeof id === "string",
+    const worker = span.origin.runId
+      ? local.find(
+          (r) =>
+            r.type === "worker.started" &&
+            r.data.runId === span.origin.runId &&
+            r.data.requestId === span.origin.requestId,
         )
-      : [];
+      : undefined;
+    const parent = worker
+      ? local.find(
+          (r) =>
+            r.type === "request.observed" &&
+            r.data.requestId === worker.data.parentRequestId,
+        )
+      : undefined;
+    const ids = worker
+      ? local
+          .filter(
+            (r) =>
+              r.type === "provider.request" &&
+              r.data.requestId === span.origin.requestId,
+          )
+          .map((r) => String(r.data.invocationId))
+      : Array.isArray(proposal?.data.invocationIds)
+        ? proposal.data.invocationIds.filter(
+            (id): id is string => typeof id === "string",
+          )
+        : [];
     const attempts = ids.flatMap((id) => {
       const chain = local.filter(
         (r) =>
-          r.data.file === file &&
+          (span.origin.runId || r.data.file === file) &&
           r.data.requestId === span.origin.requestId &&
           r.data.invocationId === id,
       );
@@ -92,6 +117,11 @@ export function explainSelection(
       observedAt: event?.time,
       request: string(request?.data.input),
       rationale: string(proposal?.data.explanation),
+      worker: span.origin.runId
+        ? string(worker?.data.agentId) ||
+          "Recorded worker (details unavailable)"
+        : undefined,
+      parentRequest: string(parent?.data.input),
       attempts,
     };
     const previous = reasons.at(-1);
@@ -145,8 +175,25 @@ export function renderReasons(
     );
     if (reason.observedAt)
       lines.push(`Observed: ${literal(reason.observedAt)}`, "");
+    if (reason.worker)
+      lines.push(
+        `Worker: ${literal(reason.worker)}. Attribution follows the verified accepted buffers and a bounded text comparison; equal text is preserved by convention, not proof of byte identity.`,
+        "",
+      );
+    if (reason.parentRequest)
+      lines.push(
+        "### Your originating request",
+        "",
+        literal(reason.parentRequest),
+        "",
+      );
     if (reason.request)
-      lines.push("### Your request", "", literal(reason.request), "");
+      lines.push(
+        reason.worker ? "### Delegated task" : "### Your request",
+        "",
+        literal(reason.request),
+        "",
+      );
     if (reason.rationale)
       lines.push("### Proposal rationale", "", literal(reason.rationale), "");
     if (reason.origin.writer === "human")
@@ -155,7 +202,10 @@ export function renderReasons(
         "",
       );
     if (reason.origin.writer === "ai" && !reason.request)
-      lines.push("No originating request was captured for this proposal.", "");
+      lines.push(
+        "No permitted originating request is available for this change.",
+        "",
+      );
     for (const attempt of reason.attempts)
       lines.push(
         `- ${literal(attempt.provider || "Unknown provider")} · ${literal(attempt.model || "Unknown model")} · effort: ${literal(attempt.effort || "unspecified")} · ${literal(attempt.phase || "unknown phase")}${attempt.retryOf ? " · retry" : ""}. ${literal(attempt.outcomes.join("; ") || "No outcome recorded")}`,
@@ -163,7 +213,7 @@ export function renderReasons(
       );
   }
   lines.push(
-    "Provider bodies and voice fragments are withheld. Saving, Git commit ownership, worker attribution and undo lineage are separate evidence.",
+    "Provider bodies and voice fragments are withheld. Saving, Git commit ownership, new/deleted files and undo lineage are separate evidence.",
   );
   return lines.join("\n");
 }

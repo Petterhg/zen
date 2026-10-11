@@ -134,6 +134,7 @@ export async function activate(context) {
     assert.ok(currentWhy.getText().includes("cleared"));
     const workers = recorder.workers(requestId);
     await workers.started("worker-fixture", "implementer", DEFAULT_AGENTS.explorer, "Update both files", "background", "repo");
+    await workers.provider("worker-fixture", { type: "provider.request", invocationId: "worker-attempt", provider: "together", model: "synthetic-worker", phase: "tools", effectiveEffort: "high", retry: false, body: { messages: [] } });
     const secondUri = vscode.Uri.file(${JSON.stringify(path.join(workspace, "second.ts"))});
     await writeFile(secondUri.fsPath, "export const second = 1;\\n");
     const secondDoc = await vscode.workspace.openTextDocument(secondUri);
@@ -156,6 +157,27 @@ export async function activate(context) {
     assert.equal(acceptedWorker.length, 2);
     assert.ok(acceptedWorker.every(r => r.data.requestId === started.data.requestId && r.data.runId === "worker-fixture"));
     assert.ok(acceptedWorker.every(r => typeof r.data.body === "string"));
+    const secondProjection = workerReport.files.find(f => f.file === secondUri.fsPath);
+    assert.ok(secondProjection.spans.some(s => s.origin.runId === "worker-fixture" && s.start === secondDoc.getText().indexOf("2")));
+    const preserved = workerReport.files.find(f => f.file === doc.uri.fsPath);
+    assert.ok(preserved.spans.some(s => s.origin.proposalId === created.data.proposalId));
+    let targetEditor = await vscode.window.showTextDocument(secondDoc);
+    const numberOffset = secondDoc.getText().indexOf("2");
+    targetEditor.selection = new vscode.Selection(secondDoc.positionAt(numberOffset), secondDoc.positionAt(numberOffset+1));
+    await recorder.why();
+    let workerWhy = await vscode.workspace.openTextDocument(recorder.inspectionUri);
+    assert.ok(workerWhy.getText().includes("Update both files"));
+    assert.ok(workerWhy.getText().includes("Use two instead"));
+    assert.ok(workerWhy.getText().includes("synthetic"));
+    await writeFile(${JSON.stringify(path.join(workspace, ".pairignore"))}, "sample.ts\\n");
+    targetEditor = await vscode.window.showTextDocument(secondDoc);
+    targetEditor.selection = new vscode.Selection(secondDoc.positionAt(numberOffset), secondDoc.positionAt(numberOffset+1));
+    await recorder.why();
+    workerWhy = await vscode.workspace.openTextDocument(recorder.inspectionUri);
+    assert.equal(workerWhy.getText().includes("Update both files"), false);
+    assert.equal(workerWhy.getText().includes("Use two instead"), false);
+    assert.equal(workerWhy.getText().includes("synthetic"), false);
+    await vscode.workspace.fs.delete(vscode.Uri.file(${JSON.stringify(path.join(workspace, ".pairignore"))}));
     const stale = { ...change, id: "stale-worker", status: "pending", files: change.files.map(f => ({ ...f })) };
     const beforeSecond = secondDoc.getText();
     await assert.rejects(automation.accept(stale), /changed since/);
@@ -182,7 +204,7 @@ export async function activate(context) {
     await recorder.inspect();
     const restricted = JSON.parse(vscode.window.activeTextEditor.document.getText());
     assert.equal(restricted.records.filter(r => r.data.file.endsWith("sample.ts")).length, 0);
-    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing", "worker parent and multi-file acceptance", "worker stale refusal and rejection records"], records: report.records.length }));
+    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing", "worker parent and multi-file acceptance", "worker stale refusal and rejection records", "worker range and parent inspector", "cross-file anchor revocation"], records: report.records.length }));
   } catch (error) { await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: false, error: String(error), stack: error.stack, diagnostic })); }
   finally { if (recorder) { await recorder.stop(); recorder.dispose(); } }
 }
