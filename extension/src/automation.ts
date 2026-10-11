@@ -93,7 +93,7 @@ export class Automation implements vscode.Disposable {
     await this.definitions.reload();
     parent.throwIfAborted();
     const assigned = (
-      profile?.tools ?? this.definitions.policy.mainTools
+      profile?.tools ?? [...this.definitions.policy.mainTools, "change_history"]
     ).filter(
       (name) =>
         (id === "main" || !CORE_TOOLS.includes(name)) &&
@@ -126,7 +126,7 @@ export class Automation implements vscode.Disposable {
     const permission = (name: string) => {
       const current =
         id === "main"
-          ? this.definitions.policy.mainTools
+          ? [...this.definitions.policy.mainTools, "change_history"]
           : this.definitions.agents[id]?.enabled
             ? this.definitions.agents[id].tools
             : [];

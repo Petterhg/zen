@@ -1,4 +1,5 @@
 import { EditorHistory } from "./history/editor.js";
+import { historyQuestion, historyTool } from "./history/tools.js";
 import { Definitions } from "./definitions.js";
 import { Automation, type WorkerEnvironment } from "./automation.js";
 import { PersonalMemory } from "./memory-service.js";
@@ -1759,6 +1760,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       const latestHuman =
         history.filter((e) => e.role === "user").at(-1)?.text ?? "";
       const quick =
+        !historyQuestion(latestHuman) &&
         !this.agentRuns.hasPending() &&
         !/\b(?:agent|worker|delegate|parallel|background)\b/i.test(
           latestHuman,
@@ -2056,6 +2058,9 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           ...readTools,
           ...this.memory.tools(latestHuman, memoryScope),
           ...workers,
+          historyTool((args, signal) =>
+            this.codeHistory.query(context, args, signal),
+          ),
           ...(context &&
           (this.conversationMode === "voice" ||
             /\b(?:highlight|point|focus|show me)\b/i.test(latestHuman))

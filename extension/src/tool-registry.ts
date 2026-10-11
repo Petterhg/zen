@@ -27,6 +27,7 @@ export const BUILTIN_TOOLS = [
   "remember_pairing_context",
   "delegate_to_agents",
   "agent_run",
+  "change_history",
   "apply_patch",
 ];
 /** Session orchestration and personal context belong only to the foreground pair. */
@@ -37,6 +38,7 @@ export const CORE_TOOLS = [
   "remember_pairing_context",
   "delegate_to_agents",
   "agent_run",
+  "change_history",
 ];
 export const TOOL_PRESENTATION: Record<
   string,

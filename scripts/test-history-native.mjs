@@ -56,6 +56,7 @@ import { EditorHistory } from ${JSON.stringify(path.join(root, "extension/src/hi
 import { Automation } from ${JSON.stringify(path.join(root, "extension/src/automation.ts"))};
 import { Definitions } from ${JSON.stringify(path.join(root, "extension/src/definitions.ts"))};
 import { DEFAULT_AGENTS } from ${JSON.stringify(path.join(root, "extension/src/subagents.ts"))};
+import { historyTool } from ${JSON.stringify(path.join(root, "extension/src/history/tools.ts"))};
 export async function activate(context) {
   let recorder;
   let diagnostic;
@@ -161,6 +162,28 @@ export async function activate(context) {
     assert.ok(secondProjection.spans.some(s => s.origin.runId === "worker-fixture" && s.start === secondDoc.getText().indexOf("2")));
     const preserved = workerReport.files.find(f => f.file === doc.uri.fsPath);
     assert.ok(preserved.spans.some(s => s.origin.proposalId === created.data.proposalId));
+    const historyTarget = { ...captured, uri: secondDoc.uri.toString(), file: secondDoc.uri.fsPath, version: secondDoc.version, text: secondDoc.getText(), selectionStart: secondDoc.getText().indexOf("2"), selectionEnd: secondDoc.getText().indexOf("2")+1 };
+    const lookup = historyTool((args, signal) => recorder.query(historyTarget, args, signal));
+    const recentHistory = await lookup.execute({ action: "recent", limit: 1 }, new AbortController().signal);
+    assert.equal(recentHistory.changes.length, 1);
+    const repoHistory = await recorder.query(undefined, { action: "recent", scope: "repository", limit: 8 }, new AbortController().signal);
+    assert.ok(repoHistory.changes.some(c => c.file === "sample.ts"));
+    assert.ok(repoHistory.changes.some(c => c.file === "second.ts"));
+    const detailHistory = await lookup.execute({ action: "detail", eventId: recentHistory.changes[0].id }, new AbortController().signal);
+    assert.equal(detailHistory.change.conversationContext.request.text, "Update both files");
+    assert.equal(detailHistory.change.conversationContext.originatingRequest.text, "Use two instead");
+    let historyCalls = 0;
+    const historyAnswer = await requestBackend({ provider: "cerebras", model: DEFAULT_MODELS.cerebras, apiKey: "synthetic", conversationMode: "chat", history: [{ role: "user", text: "Why did this change?" }], context: historyTarget, signal: new AbortController().signal, tools: [lookup], fetchImpl: async (_url, init) => {
+      historyCalls++;
+      const payload = JSON.parse(String(init.body));
+      if (historyCalls === 1) return Response.json({ choices: [{ finish_reason: "tool_calls", message: { role: "assistant", tool_calls: [{ id: "history-call", type: "function", function: { name: "change_history", arguments: JSON.stringify({ action: "selection" }) } }] } }] });
+      const evidence = JSON.parse(payload.messages.find(m => m.role === "tool").content);
+      assert.equal(evidence.state, "verified-current-buffer");
+      assert.equal(evidence.reasons[0].request.text, "Update both files");
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ status: "answer", summary: "The worker changed it for your request to update both files.", edits: [] }) } }] });
+    } });
+    assert.match(historyAnswer.summary, /worker changed/);
+    assert.equal(historyCalls, 2);
     let targetEditor = await vscode.window.showTextDocument(secondDoc);
     const numberOffset = secondDoc.getText().indexOf("2");
     targetEditor.selection = new vscode.Selection(secondDoc.positionAt(numberOffset), secondDoc.positionAt(numberOffset+1));
@@ -177,6 +200,10 @@ export async function activate(context) {
     assert.equal(workerWhy.getText().includes("Update both files"), false);
     assert.equal(workerWhy.getText().includes("Use two instead"), false);
     assert.equal(workerWhy.getText().includes("synthetic"), false);
+    const privateDetail = await lookup.execute({ action: "detail", eventId: recentHistory.changes[0].id }, new AbortController().signal);
+    assert.equal(privateDetail.change.conversationContext.request, undefined);
+    assert.equal(privateDetail.change.conversationContext.originatingRequest, undefined);
+    assert.deepEqual(privateDetail.change.attempts, []);
     await vscode.workspace.fs.delete(vscode.Uri.file(${JSON.stringify(path.join(workspace, ".pairignore"))}));
     const stale = { ...change, id: "stale-worker", status: "pending", files: change.files.map(f => ({ ...f })) };
     const beforeSecond = secondDoc.getText();
@@ -204,7 +231,7 @@ export async function activate(context) {
     await recorder.inspect();
     const restricted = JSON.parse(vscode.window.activeTextEditor.document.getText());
     assert.equal(restricted.records.filter(r => r.data.file.endsWith("sample.ts")).length, 0);
-    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing", "worker parent and multi-file acceptance", "worker stale refusal and rejection records", "worker range and parent inspector", "cross-file anchor revocation"], records: report.records.length }));
+    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing", "worker parent and multi-file acceptance", "worker stale refusal and rejection records", "worker range and parent inspector", "cross-file anchor revocation", "main-agent history tool round trip"], records: report.records.length }));
   } catch (error) { await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: false, error: String(error), stack: error.stack, diagnostic })); }
   finally { if (recorder) { await recorder.stop(); recorder.dispose(); } }
 }
