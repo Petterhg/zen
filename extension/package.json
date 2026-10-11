@@ -133,6 +133,10 @@
       {
         "command": "pairCode.historyStop",
         "title": "Zen: Stop Local Code History Recording"
+      },
+      {
+        "command": "pairCode.historyWhy",
+        "title": "Zen: Why Did This Change?"
       }
     ],
     "keybindings": [
@@ -328,6 +332,15 @@
       "editor.glyphMargin": false,
       "breadcrumbs.icons": false,
       "workbench.editor.tabActionCloseVisibility": false
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "pairCode.historyWhy",
+          "when": "resourceScheme == file && zen.available",
+          "group": "zen@10"
+        }
+      ]
     }
   },
   "enabledApiProposals": [

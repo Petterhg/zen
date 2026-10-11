@@ -107,6 +107,28 @@ export async function activate(context) {
     assert.equal(JSON.stringify(report).includes("synthetic private reasoning"), false);
     assert.ok(report.records.some(r => r.type === "document.saved" && r.data.version === accepted.data.version));
     assert.ok(report.files[0].spans.some(s => s.origin.writer === "ai" && s.origin.requestId === requestId));
+    editor = await vscode.window.showTextDocument(doc);
+    editor.selection = new vscode.Selection(doc.positionAt(start), doc.positionAt(start+1));
+    await recorder.why();
+    const whyDocument = vscode.workspace.textDocuments.find(d => d.uri.scheme === "zen-history" && d.uri.path === "/why.md");
+    assert.ok(whyDocument);
+    const whyText = whyDocument.getText();
+    assert.ok(whyText.includes("Accepted AI proposal"));
+    assert.ok(whyText.includes("Use two instead"));
+    assert.ok(whyText.includes("Synthetic test change"));
+    assert.ok(whyText.includes("retry"));
+    assert.equal(whyText.includes("fixture voice instruction"), false);
+    editor = await vscode.window.showTextDocument(doc);
+    assert.equal(await editor.edit(builder => builder.insert(doc.positionAt(doc.getText().length), "// later")), true);
+    assert.ok(doc.getText().includes("// later"));
+    const clearingDeadline = Date.now() + 3000;
+    let currentWhy = await vscode.workspace.openTextDocument(whyDocument.uri);
+    while (Date.now() < clearingDeadline && !currentWhy.getText().includes("cleared")) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      currentWhy = await vscode.workspace.openTextDocument(whyDocument.uri);
+    }
+    diagnostic = { report, currentWhy: currentWhy.getText(), isClosed: currentWhy.isClosed, contents: [...recorder.inspections], sourceText: doc.getText() };
+    assert.ok(currentWhy.getText().includes("cleared"));
     await recorder.stop(); recorder.dispose();
     recorder = new EditorHistory(fixtureContext);
     await recorder.initialize(); await recorder.inspect();
@@ -117,7 +139,7 @@ export async function activate(context) {
     await recorder.inspect();
     const restricted = JSON.parse(vscode.window.activeTextEditor.document.getText());
     assert.equal(restricted.records.filter(r => r.data.file.endsWith("sample.ts")).length, 0);
-    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies"], records: report.records.length }));
+    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing"], records: report.records.length }));
   } catch (error) { await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: false, error: String(error), stack: error.stack, diagnostic })); }
   finally { if (recorder) { await recorder.stop(); recorder.dispose(); } }
 }

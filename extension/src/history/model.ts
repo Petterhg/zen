@@ -1,6 +1,7 @@
 export interface Origin {
   writer: "human" | "ai" | "editor_unknown" | "imported";
   operation: string;
+  eventId?: string;
   proposalId?: string;
   requestId?: string;
 }
@@ -141,7 +142,10 @@ export function projectFile(
                 : undefined,
           }
         : (event.data.origin as Origin);
-    const next = applyEdits(state, event.data.edits as TextEdit[], origin);
+    const next = applyEdits(state, event.data.edits as TextEdit[], {
+      ...origin,
+      eventId: event.id,
+    });
     if (next.text !== event.data.text)
       throw new Error("History replay does not match observed buffer.");
     state = next;

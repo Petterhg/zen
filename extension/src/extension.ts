@@ -2795,6 +2795,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     vscode.commands.registerCommand("pairCode.historyInspect", () =>
       companion.codeHistory.inspect(),
     ),
+    vscode.commands.registerCommand("pairCode.historyWhy", () =>
+      companion.codeHistory.why(),
+    ),
     vscode.commands.registerCommand("pairCode.historyStop", () =>
       companion.codeHistory.stop(),
     ),

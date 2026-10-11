@@ -13,6 +13,7 @@ import type { Proposal } from "../core.js";
 import { HistoryJournal, type HistoryRecord } from "./journal.js";
 import { gitRoot, project } from "./project.js";
 import { nativeOrigin, projectFile } from "./model.js";
+import { explainSelection, renderReasons } from "./why.js";
 
 /** Local opt-in recorder. Unsupported edits stay unknown; no timing-based attribution. */
 export class EditorHistory implements vscode.Disposable {
@@ -33,13 +34,15 @@ export class EditorHistory implements vscode.Disposable {
   private subscriptions: vscode.Disposable[] = [];
   private inspection = "History has not been inspected.";
   private inspectionUri = vscode.Uri.parse("zen-history:/local-history.json");
+  private inspections = new Map<string, string>();
   private inspectionChanges = new vscode.EventEmitter<vscode.Uri>();
   private clearInspection(): void {
     this.inspection =
       "History view cleared. Inspect again with current permissions.";
-    for (const doc of vscode.workspace.textDocuments) {
-      if (doc.uri.scheme === "zen-history")
-        this.inspectionChanges.fire(doc.uri);
+    // Markdown previews may retain a URI after closing its source text editor.
+    for (const uri of this.inspections.keys()) {
+      this.inspections.set(uri, this.inspection);
+      this.inspectionChanges.fire(vscode.Uri.parse(uri));
     }
   }
   private status = vscode.window.createStatusBarItem(
@@ -61,9 +64,10 @@ export class EditorHistory implements vscode.Disposable {
       this.inspectionChanges,
       vscode.workspace.registerTextDocumentContentProvider("zen-history", {
         onDidChange: this.inspectionChanges.event,
-        provideTextDocumentContent: () =>
+        provideTextDocumentContent: (uri) =>
           this.enabled()
-            ? this.inspection
+            ? this.inspections.get(uri.toString()) ||
+              "History view unavailable."
             : "History is paused or unavailable.",
       }),
       ignoreWatcher,
@@ -80,6 +84,7 @@ export class EditorHistory implements vscode.Disposable {
       vscode.workspace.onDidOpenTextDocument((doc) => this.observe(doc)),
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (!event.contentChanges.length) return;
+        this.clearInspection();
         const text = event.document.getText();
         const file = event.document.uri.fsPath;
         const version = event.document.version;
@@ -566,8 +571,70 @@ export class EditorHistory implements vscode.Disposable {
     this.inspectionUri = vscode.Uri.parse(
       `zen-history:/local-history.json?inspection=${randomUUID()}`,
     );
+    this.inspections.set(this.inspectionUri.toString(), this.inspection);
     const doc = await vscode.workspace.openTextDocument(this.inspectionUri);
     await vscode.window.showTextDocument(doc, { preview: true });
+  }
+  async why(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.scheme !== "file") return;
+    const document = editor.document;
+    const file = document.uri.fsPath;
+    const version = document.version;
+    const text = document.getText();
+    const selection = editor.selection.isEmpty
+      ? document.lineAt(editor.selection.active.line).range
+      : editor.selection;
+    const start = document.offsetAt(selection.start);
+    const end = document.offsetAt(selection.end);
+    this.clearInspection();
+    await this.flush();
+    if (!this.journal || !this.directory || !(await this.permitted(file))) {
+      void vscode.window.showInformationMessage(
+        "Enable local code history in a trusted repository with editor context shared to inspect changes.",
+      );
+      return;
+    }
+    const records = await HistoryJournal.read(
+      this.directory,
+      this.journal.repositoryId,
+      this.context.secrets,
+    );
+    const reasons = explainSelection(
+      records,
+      this.journal.id,
+      file,
+      text,
+      start,
+      end,
+    );
+    // Capture the target once; navigation never retargets this inspection.
+    if (
+      document.isClosed ||
+      document.version !== version ||
+      !(await this.permitted(file))
+    )
+      return;
+    if (document.version !== version || !this.enabled()) return;
+    this.inspection = renderReasons(path.relative(this.root!, file), reasons);
+    this.inspectionUri = vscode.Uri.parse(
+      `zen-history:/why.md?inspection=${randomUUID()}`,
+    );
+    this.inspections.set(this.inspectionUri.toString(), this.inspection);
+    const view = await vscode.workspace.openTextDocument(this.inspectionUri);
+    if (document.version !== version || !(await this.permitted(file))) {
+      this.clearInspection();
+      return;
+    }
+    await vscode.window.showTextDocument(view, {
+      preview: true,
+      viewColumn: vscode.ViewColumn.Beside,
+    });
+    // Use the bundled Markdown renderer when available; the source stays read-only.
+    if (
+      (await vscode.commands.getCommands(true)).includes("markdown.showPreview")
+    )
+      await vscode.commands.executeCommand("markdown.showPreview", view.uri);
   }
   async stop(): Promise<void> {
     this.stopped = true;
