@@ -1,6 +1,6 @@
 # Conversation and code history implementation plan
 
-Status: planned, not implemented. Updated 2026-10-11. This is the implementation and verification plan for repository-level provenance in Zen: connecting human requests, voice guidance, agent invocations, decisions, edits and Git history. Commands, modules and tests described as proposed below do not exist yet.
+Status: first local recording slice implemented; broader milestones remain planned. Updated 2026-10-11. This is the implementation and verification plan for repository-level provenance in Zen: connecting human requests, voice guidance, agent invocations, decisions, edits and Git history. See [implemented scope and verification](local-code-history.md); commands, modules and tests described as proposed below remain targets unless that coverage document explicitly lists them.
 
 The first usable release must answer “who changed this, at whose request, using which agent, and with what recorded explanation?” across the full assistance slider. The same records must remain meaningful when another developer fetches the work, a worker runs separately, or a change is reverted.
 

@@ -1,3 +1,4 @@
+import { EditorHistory } from "./history/editor.js";
 import { Definitions } from "./definitions.js";
 import { Automation, type WorkerEnvironment } from "./automation.js";
 import { PersonalMemory } from "./memory-service.js";
@@ -500,6 +501,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       fontStyle: "italic",
     },
   });
+  readonly codeHistory: EditorHistory;
   private proposal?: Proposal;
   private backendJob?: AbortController;
   private sessionJob?: AbortController;
@@ -600,6 +602,8 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     private readonly context: vscode.ExtensionContext,
     private definitions: Definitions,
   ) {
+    this.codeHistory = new EditorHistory(context);
+    this.disposables.push(this.codeHistory);
     this.automation = new Automation(
       definitions,
       vscode.Uri.joinPath(context.globalStorageUri, "task-worktrees").fsPath,
@@ -2105,6 +2109,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         controller.signal,
         context?.file,
       );
+      const historyRequestId = await this.codeHistory.request(
+        context?.uri,
+        latestHuman,
+        {
+          provider,
+          model: DEFAULT_MODELS.cerebras,
+          assistance,
+          requestedEffort: effort,
+          conversationMode: this.conversationMode,
+          targetVersion: context?.version,
+          selection: context?.selection,
+        },
+      );
       let result = await requestBackend({
         notifications: () => this.agentRuns.drain(),
         conversationMode: this.conversationMode,
@@ -2193,6 +2210,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         result = { status: "answer", summary, speech: summary, edits: [] };
       }
       const proposal = context ? createProposal(context, result) : undefined;
+      if (proposal) await this.codeHistory.proposal(proposal, historyRequestId);
       if (!context && result.edits.length)
         throw new Error(
           "Open a small file or select code before asking for an edit.",
@@ -2482,6 +2500,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     );
     if (!proposal) return;
     this.reject(false);
+    await this.codeHistory.proposal(proposal);
     this.proposal = proposal;
     await this.showProposal();
   }
@@ -2527,7 +2546,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
     await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
     this.publishContext();
   }
-  nativeAccepted(proposal: Proposal): void {
+  async nativeAccepted(proposal: Proposal): Promise<void> {
     if (
       !this.proposal ||
       this.proposal.uri !== proposal.uri ||
@@ -2548,9 +2567,12 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         proposal.newText
     )
       return;
-    this.finishAcceptance();
+    const current = this.proposal;
+    await this.codeHistory.accepted(current);
+    this.finishAcceptance(current);
   }
-  private finishAcceptance(): void {
+  private finishAcceptance(proposal: Proposal): void {
+    if (this.proposal !== proposal) return;
     this.memory.checkpointOutcome(
       this.proposalCheckpointId,
       "accepted_unsaved",
@@ -2596,6 +2618,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         "The file changed after this proposal. Request a fresh edit; your work has been preserved.",
       );
     }
+    await this.codeHistory.prepareApply(proposal);
     const editor = await vscode.window.showTextDocument(document, {
       preserveFocus: false,
     });
@@ -2621,10 +2644,12 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       { undoStopBefore: true, undoStopAfter: true },
     );
     if (!applied) throw new Error("The editor could not apply this proposal.");
-    this.finishAcceptance();
+    await this.codeHistory.accepted(proposal);
+    this.finishAcceptance(proposal);
   }
   reject(notify = true): void {
     if (notify && this.proposal) {
+      this.codeHistory.rejected(this.proposal);
       this.memory.checkpointOutcome(this.proposalCheckpointId, "rejected");
       this.lastEditEvent = { status: "rejected", file: this.proposal.uri };
       this.history.entries.push({
@@ -2739,6 +2764,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     );
   }
   const companion = new Companion(context, definitions);
+  await companion.codeHistory.restore();
   await vscode.commands.executeCommand(
     "setContext",
     "zen.available",
@@ -2746,6 +2772,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   );
   context.subscriptions.push(
     companion,
+    vscode.commands.registerCommand("pairCode.historyInit", () =>
+      companion.codeHistory.initialize(),
+    ),
+    vscode.commands.registerCommand("pairCode.historyInspect", () =>
+      companion.codeHistory.inspect(),
+    ),
+    vscode.commands.registerCommand("pairCode.historyStop", () =>
+      companion.codeHistory.stop(),
+    ),
     vscode.window.registerWebviewViewProvider("pairCode.companion", companion, {
       webviewOptions: { retainContextWhenHidden: true },
     }),

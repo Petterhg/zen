@@ -121,6 +121,18 @@
       {
         "command": "pairCode.settings",
         "title": "Zen: Settings"
+      },
+      {
+        "command": "pairCode.historyInit",
+        "title": "Zen: Enable Local Code History"
+      },
+      {
+        "command": "pairCode.historyInspect",
+        "title": "Zen: Inspect Local Code History"
+      },
+      {
+        "command": "pairCode.historyStop",
+        "title": "Zen: Stop Local Code History Recording"
       }
     ],
     "keybindings": [
@@ -319,6 +331,7 @@
     }
   },
   "enabledApiProposals": [
-    "inlineCompletionsAdditions"
+    "inlineCompletionsAdditions",
+    "textDocumentChangeReason"
   ]
 }

@@ -21,7 +21,8 @@
     "prototype:zen": "node scripts/serve-prototype.mjs",
     "test:prototype": "node scripts/test-prototype.mjs",
     "memory:serve": "node scripts/memory-serve.mjs",
-    "eval:together": "node --import tsx scripts/eval-together.mjs"
+    "eval:together": "node --import tsx scripts/eval-together.mjs",
+    "test:history:native": "node scripts/test-history-native.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -347,3 +347,7 @@ Repair validation: the actual repaired runtime launched successfully with a temp
 macOS display-name correction: runtime overlays now write Zen to CFBundleName and CFBundleDisplayName in localized InfoPlist.strings for each bundled locale. The raw Info.plist name stays VSCodium for Electron helper discovery. Foundation verification on a disposable bundle reports raw VSCodium and localized Zen. Existing localized metadata is preserved. This takes effect on the next full app launch; the running editor is not restarted automatically.
 
 Validation of localized naming: full validation passed (140 tests plus browser/prototype checks), and the signed disposable app started with renderer/helper processes. The isolated process exited after the 15-second SIGTERM cleanup timeout; a subsequent check found it had already stopped. Dock tooltip appearance after relaunch remains a manual check.
+
+## Local code history
+
+History is separately opt-in through **Zen: Enable Local Code History**. It records permitted open buffers and foreground request/proposal/acceptance/save links locally, without starting voice or changing assistance policy. Unknown edit sources remain unknown. **Zen: Inspect Local Code History** opens a read-only virtual diagnostic view; **Zen: Stop Local Code History Recording** retains encrypted evidence while disabling capture. See [coverage, storage and verification limits](local-code-history.md). Provider wire data, worker integrations, Git mappings and sharing are not captured yet.
