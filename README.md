@@ -4,7 +4,7 @@ Zen is the open-source home of the Pair Code prototype. The app and configuratio
 
 A local Code-OSS foundation for one human and an AI to work together continuously: files on the left, code and tabs in the middle, terminal below, and a quiet pairing companion on the right.
 
-**Current focus: great voice pairing, personal memory and a calm editor UI.** Help the user think, understand and write code. Team collaboration, issue boards and delivery automation are deferred; they are not prerequisites for the core product.
+**Current focus: great voice pairing, personal memory and a calm editor UI.** Help the user think, understand and write code. The next planned project is [conversation-linked code history](docs/conversation-history-plan.md), including shared provenance for independent developers and a later live collaboration stage. Issue boards and delivery automation remain deferred.
 
 GPT-Live 1 (`gpt-live-1`) handles the full-duplex voice conversation. Client delegation connects it to the fixed fast foreground backend, Cerebras `qwen-3.8-27b`. Isolated research uses Together AI: Explorer defaults to `deepseek-ai/DeepSeek-V4.1-Flash`, and Deep research defaults to `deepseek-ai/DeepSeek-V4-Pro-0813`. Foreground reasoning defaults to `auto` through OpenAI Decisions, with a safe fallback; inline completion uses `none`. Groq and the workboard model selector have been removed.
 
@@ -84,6 +84,19 @@ These features are implemented in the prototype; this is not a production-readin
 
 Ordered by current priority, not promised release dates. Completed work moves into Features after it is merged; open PRs remain identified here. Update this section in the same change when user-visible capability or priority changes.
 
+### Next project: conversation-linked code history
+
+The [technical implementation and verification plan](docs/conversation-history-plan.md) defines repository initialization, durable attribution, Git coexistence and sharing. This is planned work; existing session traces and worker activity are not a complete provenance system.
+
+- [ ] Prove native edit origins and stable range lineage; initialize repository identity and a durable history store separate from the code index.
+- [ ] Connect human typing, voice guidance, proposals, provider invocations and worker edits without confusing human authorship with AI influence.
+- [ ] Add a quiet “Why did this change?” inspector and exact mappings for staged changes, commits, merges and rewritten Git history.
+- [ ] Preview selective request/commit reversals while preserving later unrelated work and historical conversations.
+- [ ] Exchange authenticated, scoped history between independent developers; distinguish missing, restricted and unsynchronized evidence.
+- [ ] Add live shared editing and explicit assistant ownership after independent history exchange is proven.
+
+Acceptance spans voice-only human coding through full AI implementation with human acceptance. Each milestone has an independent attribution oracle, failure cases and separate offline/native/provider/human-voice evidence. The team pilot requires two isolated users to publish, inspect, merge and reverse changes with their original provenance intact.
+
 ### Core: voice and pair programming
 
 **Goal:** One human and one assistant, working on the code together. The assistant follows what the human is doing, explains at the right level and helps as much or as little as requested.
@@ -125,7 +138,6 @@ Native themes, reduced chrome, folding and persistent voice controls are impleme
 
 ### Later: retained ideas, outside the current scope
 
-- [ ] Collaboration with colleagues and shared editable workspaces.
 - [ ] Linear/project boards and the GitHub PR → review → merge → CI/CD → cloud verification workflow.
 - [ ] Dedicated Reviewer, Delivery and SRE agents and long-running cloud/Sentry monitoring.
 - [ ] MCP and additional third-party integrations.
