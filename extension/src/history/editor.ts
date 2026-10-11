@@ -1,3 +1,9 @@
+import {
+  sanitizeEvidence,
+  evidenceDigest,
+  inspectEvidence,
+  type ProviderEvidence,
+} from "./evidence.js";
 import * as vscode from "vscode";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -17,6 +23,8 @@ export class EditorHistory implements vscode.Disposable {
   private queue: Promise<unknown> = Promise.resolve();
   private failure?: string;
   private stopped = false;
+  private requests = new Map<string, { file: string; invocations: string[] }>();
+  private transcriptIds = new Set<string>();
   private snapshots = new Map<string, { text: string; version: number }>();
   private proposals = new WeakMap<
     Proposal,
@@ -255,6 +263,8 @@ export class EditorHistory implements vscode.Disposable {
   private async startSession(root: string): Promise<void> {
     this.failure = undefined;
     this.snapshots.clear();
+    this.requests.clear();
+    this.transcriptIds.clear();
     const metadata = await project(root);
     const directory = path.join(
       this.context.globalStorageUri.fsPath,
@@ -280,7 +290,7 @@ export class EditorHistory implements vscode.Disposable {
       actorId,
       identity: "local device claim; not an authenticated person",
       coverage:
-        "open permitted text buffers; no filesystem, worker, provider-wire or Git capture",
+        "open permitted text buffers, main backend attempts/results and received voice fragments; no filesystem, worker or Git capture",
     });
     for (const doc of vscode.workspace.textDocuments) this.observe(doc);
     await this.flush();
@@ -303,14 +313,103 @@ export class EditorHistory implements vscode.Disposable {
       await this.record("request.observed", {
         requestId,
         file: vscode.Uri.parse(file).fsPath,
-        input,
+        input: sanitizeEvidence(input),
         ...metadata,
+        voiceSessionId:
+          typeof metadata.voiceSessionToken === "number"
+            ? `${this.journal.id}:${metadata.voiceSessionToken}`
+            : undefined,
         coverage: "host request; not full provider input or hidden reasoning",
       });
     } catch {
       return;
     }
+    this.requests.set(requestId, {
+      file: vscode.Uri.parse(file).fsPath,
+      invocations: [],
+    });
     return requestId;
+  }
+  async provider(
+    requestId: string | undefined,
+    event: ProviderEvidence,
+  ): Promise<void> {
+    if (!requestId) return;
+    const request = this.requests.get(requestId);
+    if (!request || !(await this.permitted(request.file))) return;
+    if (event.type === "provider.request")
+      request.invocations.push(event.invocationId);
+    const sanitized = sanitizeEvidence(event) as ProviderEvidence;
+    await this.record(event.type, {
+      ...sanitized,
+      file: request.file,
+      requestId,
+      bodyDigest:
+        sanitized.body === undefined
+          ? undefined
+          : evidenceDigest(sanitized.body),
+      coverage:
+        "sanitized derivative; private reasoning omitted; body access withheld",
+    });
+  }
+  async result(requestId: string | undefined, result: unknown): Promise<void> {
+    if (!requestId) return;
+    const request = this.requests.get(requestId);
+    if (!request || !(await this.permitted(request.file))) return;
+    try {
+      await this.record("backend.result", {
+        file: request.file,
+        requestId,
+        invocationIds: [...request.invocations],
+        body: sanitizeEvidence(result),
+        coverage: "host-validated result; application and playback not implied",
+      });
+    } catch {
+      /* Recorder status already reports the gap; do not disrupt ordinary answers. */
+    }
+  }
+  conversation(
+    file: string | undefined,
+    sessionToken: number,
+    event: {
+      type: string;
+      event_id?: string;
+      delta?: string;
+      start_ms?: number;
+      end_ms?: number;
+    },
+  ): void {
+    if (!file || !this.journal || !this.enabled() || !event.delta) return;
+    const key = event.event_id
+      ? `${sessionToken}:${event.event_id}`
+      : undefined;
+    if (key && this.transcriptIds.has(key)) return;
+    if (key) this.transcriptIds.add(key);
+    if (this.transcriptIds.size > 4000)
+      this.transcriptIds.delete(this.transcriptIds.values().next().value!);
+    const body = {
+      role:
+        event.type === "session.input_transcript.delta" ? "user" : "assistant",
+      text: sanitizeEvidence(event.delta),
+      startMs: event.start_ms,
+      endMs: event.end_ms,
+    };
+    const target = vscode.Uri.parse(file).fsPath;
+    this.enqueue(async () => {
+      if (await this.permitted(target))
+        await this.record("voice.transcript.fragment", {
+          file: target,
+          voiceSessionId: `${this.journal!.id}:${sessionToken}`,
+          configuredVoiceModel: "gpt-live-1",
+          eventId: event.event_id,
+          role: body.role,
+          startMs: body.startMs,
+          endMs: body.endMs,
+          body,
+          coverage:
+            "received transcript; observed focus only; not playback or edit causality",
+        });
+    });
   }
   async proposal(proposal: Proposal, requestId?: string): Promise<void> {
     if (!this.journal) return;
@@ -327,6 +426,9 @@ export class EditorHistory implements vscode.Disposable {
     await this.record("proposal.created", {
       proposalId: id,
       requestId,
+      invocationIds: requestId
+        ? [...(this.requests.get(requestId)?.invocations || [])]
+        : [],
       file,
       version: proposal.version,
       start: proposal.start,
@@ -421,7 +523,13 @@ export class EditorHistory implements vscode.Disposable {
         typeof record.data.file === "string" &&
         (await this.permitted(record.data.file))
       )
-        allowed.push(record);
+        allowed.push(
+          record.type.startsWith("provider.") ||
+            record.type === "backend.result" ||
+            record.type === "voice.transcript.fragment"
+            ? { ...record, data: inspectEvidence(record.data) }
+            : record,
+        );
     }
     if (!this.enabled()) allowed.length = 0;
     const report = {
@@ -437,7 +545,7 @@ export class EditorHistory implements vscode.Disposable {
       localActorId: this.context.globalState.get("history.localActor"),
       identity: "local device claim; not an authenticated person",
       coverage:
-        "Local open buffers, host requests and accepted single-file previews. Other edits remain unknown. No Git mappings, worker capture, provider wire input, sharing or hidden reasoning.",
+        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. No Git mappings, worker capture, sharing, playback proof or hidden reasoning.",
       files: [
         ...new Set(
           allowed

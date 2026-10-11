@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { sanitizeEvidence, type ProviderEvidence } from "./history/evidence.js";
 import { numberedEditorReference } from "./working-context.js";
 import { isToolFailure } from "./tool-errors.js";
 import {
@@ -66,6 +68,7 @@ export interface Options {
   tools?: BackendTool[];
   assistanceLevel?: number;
   effort?: "none" | "low" | "medium" | "high";
+  onEvidence?: (event: ProviderEvidence) => Promise<void> | void;
   onProgress?: (name: string) => void;
   onTrace?: (event: TraceEvent) => void;
   onResearch?: (article: ResearchArticle) => void;
@@ -157,6 +160,7 @@ async function complete(
   inline = false,
   retry = false,
   contextAnswer = false,
+  retryOf?: string,
 ): Promise<Message> {
   options.signal.throwIfAborted();
   const limits = providerLimits(options.provider);
@@ -203,63 +207,111 @@ async function complete(
     retry,
     tools: structured ? [] : tools?.map((t) => t.name),
   });
-  const response = await (options.fetchImpl ?? fetch)(
-    endpoints[options.provider],
-    {
+  const invocationId = randomUUID();
+  const phase = contextAnswer
+    ? "context_answer"
+    : inline
+      ? "inline"
+      : structured
+        ? "format"
+        : "tools";
+  const base = {
+    invocationId,
+    retryOf,
+    provider: options.provider,
+    model: options.model,
+    phase,
+    effectiveEffort: effort,
+    retry,
+  };
+  const emit = async (event: ProviderEvidence) => {
+    try {
+      await options.onEvidence?.(
+        sanitizeEvidence(event, [options.apiKey]) as ProviderEvidence,
+      );
+    } catch {
+      trace(options, {
+        type: "history.gap",
+        invocationId,
+        category: "recorder_failure",
+      });
+    }
+  };
+  const body = {
+    model: options.model,
+    messages,
+    max_tokens: maxTokens,
+    stream: false,
+    ...(together
+      ? reasoning.parameters
+      : { reasoning_effort: effort, reasoning_format: "parsed" }),
+    ...(!structured
+      ? {
+          tools: tools!.map(({ name, description, parameters }) => ({
+            type: "function",
+            function: { name, description, parameters },
+          })),
+          tool_choice: "auto",
+          parallel_tool_calls: false,
+        }
+      : {
+          response_format:
+            options.model === DEFAULT_MODELS[options.provider] ||
+            (together &&
+              RESEARCH_MODELS.includes(
+                options.model as (typeof RESEARCH_MODELS)[number],
+              ))
+              ? {
+                  type: "json_schema",
+                  json_schema: {
+                    name: contextAnswer
+                      ? "context_answer"
+                      : inline
+                        ? "inline_insertion"
+                        : "pair_result",
+                    ...(!together ? { strict: true } : {}),
+                    schema: contextAnswer
+                      ? CONTEXT_ANSWER_SCHEMA
+                      : inline
+                        ? INLINE_SCHEMA
+                        : backendSchema(options.assistanceLevel),
+                  },
+                }
+              : { type: "json_object" },
+        }),
+  };
+  await emit({ ...base, type: "provider.request", body });
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(endpoints[options.provider], {
       method: "POST",
       headers: {
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
       },
       redirect: "error",
-      body: JSON.stringify({
-        model: options.model,
-        messages,
-        max_tokens: maxTokens,
-        stream: false,
-        ...(together
-          ? reasoning.parameters
-          : { reasoning_effort: effort, reasoning_format: "parsed" }),
-        ...(!structured
-          ? {
-              tools: tools!.map(({ name, description, parameters }) => ({
-                type: "function",
-                function: { name, description, parameters },
-              })),
-              tool_choice: "auto",
-              parallel_tool_calls: false,
-            }
-          : {
-              response_format:
-                options.model === DEFAULT_MODELS[options.provider] ||
-                (together &&
-                  RESEARCH_MODELS.includes(
-                    options.model as (typeof RESEARCH_MODELS)[number],
-                  ))
-                  ? {
-                      type: "json_schema",
-                      json_schema: {
-                        name: contextAnswer
-                          ? "context_answer"
-                          : inline
-                            ? "inline_insertion"
-                            : "pair_result",
-                        ...(!together ? { strict: true } : {}),
-                        schema: contextAnswer
-                          ? CONTEXT_ANSWER_SCHEMA
-                          : inline
-                            ? INLINE_SCHEMA
-                            : backendSchema(options.assistanceLevel),
-                      },
-                    }
-                  : { type: "json_object" },
-            }),
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.any([options.signal, AbortSignal.timeout(120000)]),
-    },
-  );
+    });
+  } catch (error) {
+    await emit({
+      ...base,
+      type: "provider.failure",
+      category: options.signal.aborted ? "cancelled" : "transport_failure",
+      elapsedMs: Date.now() - started,
+    });
+    // Preserve the original transport error for the existing recovery/lifecycle path.
+    throw error;
+  }
   if (!response.ok) {
     const diagnostic = await providerDiagnostic(response);
+    await emit({
+      ...base,
+      type: "provider.failure",
+      status: response.status,
+      category: diagnostic.category,
+      elapsedMs: Date.now() - started,
+    });
     trace(options, {
       type: "provider.error",
       provider: options.provider,
@@ -276,6 +328,7 @@ async function complete(
         inline,
         true,
         contextAnswer,
+        invocationId,
       );
     }
     throw new BackendError(
@@ -283,7 +336,27 @@ async function complete(
       `${options.provider} returned HTTP ${response.status}. Request category: ${diagnostic.category}.`,
     );
   }
-  const data = (await response.json()) as {
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    await emit({
+      ...base,
+      type: "provider.failure",
+      category: "invalid_json",
+      status: response.status,
+      elapsedMs: Date.now() - started,
+    });
+    throw error;
+  }
+  await emit({
+    ...base,
+    type: "provider.response",
+    status: response.status,
+    elapsedMs: Date.now() - started,
+    body: payload,
+  });
+  const data = payload as {
     choices?: { message?: Message; finish_reason?: string }[];
     usage?: unknown;
   };
@@ -326,6 +399,7 @@ async function complete(
         inline,
         true,
         contextAnswer,
+        invocationId,
       );
     }
     if (!inline)

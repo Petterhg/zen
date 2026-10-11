@@ -50,6 +50,8 @@ const source = `
 import * as vscode from "vscode";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
+import { requestBackend, DEFAULT_MODELS } from ${JSON.stringify(path.join(root, "extension/src/backend.ts"))};
+import { createProposal } from ${JSON.stringify(path.join(root, "extension/src/core.ts"))};
 import { EditorHistory } from ${JSON.stringify(path.join(root, "extension/src/history/editor.ts"))};
 export async function activate(context) {
   let recorder;
@@ -70,8 +72,18 @@ export async function activate(context) {
     assert.ok(doc.getText().includes("// human"), "native typing command must change the target buffer");
     await recorder.flush();
     const requestId = await recorder.request(doc.uri.toString(), "Use two instead", { provider: "synthetic", assistance: 100 });
-    const start = doc.getText().indexOf("1");
-    const proposal = { uri: doc.uri.toString(), version: doc.version, start, end: start + 1, oldText: "1", newText: "2", summary: "Synthetic test change" };
+    const fragment = { type: "session.input_transcript.delta", event_id: "synthetic-fragment", delta: "fixture voice instruction", start_ms: 10, end_ms: 30 };
+    recorder.conversation(doc.uri.toString(), 1, fragment);
+    recorder.conversation(doc.uri.toString(), 1, fragment);
+    await recorder.flush();
+    const captured = { uri: doc.uri.toString(), file: doc.uri.fsPath, language: doc.languageId, version: doc.version, text: doc.getText(), selection: "", selectionStart: 0, selectionEnd: 0, diagnostics: [] };
+    const generated = { status: "proposal", summary: "Synthetic test change", edits: [{ oldText: "1", newText: "2" }] };
+    let attempts = 0;
+    const result = await requestBackend({ provider: "cerebras", model: DEFAULT_MODELS.cerebras, apiKey: "synthetic-native-secret", history: [{ role: "user", text: "Use two instead" }], context: captured, assistanceLevel: 100, signal: new AbortController().signal, onEvidence: event => recorder.provider(requestId, event), fetchImpl: async () => { attempts++; return Response.json({ choices: [{ finish_reason: attempts === 1 ? "length" : "stop", message: { content: attempts === 1 ? "partial" : JSON.stringify(generated), reasoning: "synthetic private reasoning" } }] }); } });
+    await recorder.result(requestId, result);
+    const proposal = createProposal(captured, result);
+    assert.ok(proposal);
+    const start = proposal.start;
     await recorder.proposal(proposal, requestId);
     await recorder.prepareApply(proposal);
     await editor.edit(builder => builder.replace(new vscode.Range(doc.positionAt(start), doc.positionAt(start+1)), "2"), { undoStopBefore: true, undoStopAfter: true });
@@ -84,6 +96,15 @@ export async function activate(context) {
     assert.ok(report.records.some(r => r.type === "document.changed" && r.data.origin.writer === "human"));
     const accepted = report.records.find(r => r.type === "proposal.accepted");
     assert.equal(accepted.data.requestId, requestId);
+    const invocations = report.records.filter(r => r.type === "provider.request");
+    assert.equal(invocations.length, 2);
+    assert.equal(invocations[1].data.retryOf, invocations[0].data.invocationId);
+    const created = report.records.find(r => r.type === "proposal.created");
+    assert.deepEqual(created.data.invocationIds, invocations.map(r => r.data.invocationId));
+    assert.equal(report.records.filter(r => r.type === "voice.transcript.fragment").length, 1);
+    for (const r of report.records.filter(r => r.type.startsWith("provider.") || r.type === "backend.result" || r.type === "voice.transcript.fragment")) assert.equal(typeof r.data.body, "string");
+    assert.equal(JSON.stringify(report).includes("fixture voice instruction"), false);
+    assert.equal(JSON.stringify(report).includes("synthetic private reasoning"), false);
     assert.ok(report.records.some(r => r.type === "document.saved" && r.data.version === accepted.data.version));
     assert.ok(report.files[0].spans.some(s => s.origin.writer === "ai" && s.origin.requestId === requestId));
     await recorder.stop(); recorder.dispose();
@@ -96,7 +117,7 @@ export async function activate(context) {
     await recorder.inspect();
     const restricted = JSON.parse(vscode.window.activeTextEditor.document.getText());
     assert.equal(restricted.records.filter(r => r.data.file.endsWith("sample.ts")).length, 0);
-    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation"], records: report.records.length }));
+    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies"], records: report.records.length }));
   } catch (error) { await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: false, error: String(error), stack: error.stack, diagnostic })); }
   finally { if (recorder) { await recorder.stop(); recorder.dispose(); } }
 }

@@ -1632,6 +1632,14 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           event.type === "session.output_transcript.delta"
         ) {
           this.history.append(event);
+          this.codeHistory.conversation(
+            this.editor &&
+              vscode.workspace.getWorkspaceFolder(this.editor.document.uri)
+              ? this.editor.document.uri.toString()
+              : undefined,
+            this.sessionToken,
+            event,
+          );
           this.publishTranscript();
         }
         if (event.type === "session.output_transcript.delta") {
@@ -2118,11 +2126,19 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           assistance,
           requestedEffort: effort,
           conversationMode: this.conversationMode,
+          voiceSessionToken:
+            delegationId && this.conversationMode === "voice"
+              ? this.sessionToken
+              : undefined,
+          delegationId,
+          transcriptOffsetMs: offsetMs,
           targetVersion: context?.version,
           selection: context?.selection,
         },
       );
       let result = await requestBackend({
+        onEvidence: (event) =>
+          this.codeHistory.provider(historyRequestId, event),
         notifications: () => this.agentRuns.drain(),
         conversationMode: this.conversationMode,
         responseStyle: quick ? "brief" : undefined,
@@ -2209,6 +2225,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
           "The pairing style changed while I was preparing that draft. No preview was added; I’ll use the new style for your next request.";
         result = { status: "answer", summary, speech: summary, edits: [] };
       }
+      await this.codeHistory.result(historyRequestId, result);
       const proposal = context ? createProposal(context, result) : undefined;
       if (proposal) await this.codeHistory.proposal(proposal, historyRequestId);
       if (!context && result.edits.length)
