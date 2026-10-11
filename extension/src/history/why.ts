@@ -21,7 +21,7 @@ export interface ChangeReason {
   }[];
 }
 
-/** Exact current-replica replay only. Never attribute by timestamp or nearby speech. */
+/** Exact current-replica replay with verified ancestry. Never attribute by timestamp or nearby speech. */
 export function explainSelection(
   records: HistoryRecord[],
   replicaId: string,
@@ -32,14 +32,20 @@ export function explainSelection(
 ): ChangeReason[] | undefined {
   if (start < 0 || end < start || end > text.length)
     throw new Error("Invalid history selection.");
-  const local = records.filter((r) => r.replicaId === replicaId);
-  const state = projectFile(local, file);
+  const state = projectFile(
+    records.filter((r) => r.replicaId === replicaId),
+    file,
+    records,
+  );
   if (!state || state.text !== text) return undefined;
   const string = (value: unknown) =>
     typeof value === "string" ? value : undefined;
   const reasons: ChangeReason[] = [];
   for (const span of state.spans) {
     if (span.end <= start || span.start >= end) continue;
+    const local = records.filter(
+      (r) => r.replicaId === (span.origin.replicaId || replicaId),
+    );
     const event = local.find((r) => r.id === span.origin.eventId);
     const proposal = local.find(
       (r) =>
@@ -147,7 +153,7 @@ export function renderReasons(
     "",
     literal(file),
     "",
-    "Local evidence for the selected text. This is stated rationale, not private reasoning or proof of a person's identity.",
+    "Local evidence for the selected text. This is stated rationale, not private reasoning or proof of a person's identity. Restart ancestry preserves origins by exact-text convention; an unobserved edit and revert cannot be detected.",
     "",
   ];
   if (!reasons)

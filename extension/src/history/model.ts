@@ -4,6 +4,7 @@ export interface Origin {
   writer: "human" | "ai" | "editor_unknown" | "imported";
   operation: string;
   eventId?: string;
+  replicaId?: string;
   proposalId?: string;
   requestId?: string;
   runId?: string;
@@ -98,12 +99,19 @@ export function nativeOrigin(
 export function projectFile(
   records: import("./journal.js").HistoryRecord[],
   file: string,
+  ancestors: import("./journal.js").HistoryRecord[] = records,
+  visiting = new Set<string>(),
 ): DocumentHistory | undefined {
   const local = records
     .filter((event) => event.data.file === file)
     .sort((a, b) => a.sequence - b.sequence);
   if (new Set(local.map((event) => event.replicaId)).size > 1)
     throw new Error("Project each replica independently.");
+  const replica = local[0]?.replicaId;
+  if (replica && (visiting.has(replica) || visiting.size >= 64))
+    throw new Error("Invalid or excessive history ancestry.");
+  const nextVisiting = new Set(visiting);
+  if (replica) nextVisiting.add(replica);
   const proposals = new Map(
     local
       .filter((event) => event.type === "proposal.created")
@@ -118,7 +126,32 @@ export function projectFile(
   for (const event of local) {
     if (event.type === "document.baseline") {
       const text = String(event.data.text);
-      if (!state || state.text !== text) state = baseline(text);
+      if (!state || state.text !== text) {
+        state = baseline(text);
+        const parent = event.data.parent as
+          { replicaId: string; eventId: string; digest: string } | undefined;
+        if (parent && typeof parent.replicaId === "string") {
+          const stream = ancestors.filter(
+            (r) => r.replicaId === parent.replicaId,
+          );
+          const end = stream.find(
+            (r) => r.id === parent.eventId && r.data.file === file,
+          );
+          if (end) {
+            const inherited = projectFile(
+              stream.filter((r) => r.sequence <= end.sequence),
+              file,
+              ancestors,
+              nextVisiting,
+            );
+            if (
+              inherited?.text === text &&
+              evidenceDigest(inherited) === parent.digest
+            )
+              state = inherited;
+          }
+        }
+      }
     }
     if (event.type !== "document.changed") continue;
     const text = String(event.data.beforeText);
@@ -162,6 +195,7 @@ export function projectFile(
           ? "accepted-worker-text-diff"
           : "ambiguous-worker-text-diff",
         eventId: event.id,
+        replicaId: event.replicaId,
         ...(lineage.certain
           ? {
               runId: String(worker.data.runId),
@@ -200,10 +234,54 @@ export function projectFile(
     const next = applyEdits(state, event.data.edits as TextEdit[], {
       ...origin,
       eventId: event.id,
+      replicaId: event.replicaId,
     });
     if (next.text !== event.data.text)
       throw new Error("History replay does not match observed buffer.");
     state = next;
   }
   return state;
+}
+
+/** Only a unique leaf stream in this checkout may supply restart ancestry.
+ * Equal bytes are a continuity convention, not proof against external edit/revert.
+ * Concurrent leaves are deliberately ambiguous; timestamps never choose a winner.
+ */
+export function restartParent(
+  records: import("./journal.js").HistoryRecord[],
+  file: string,
+  text: string,
+  checkout: string,
+): { replicaId: string; eventId: string; digest: string } | undefined {
+  const replicas = new Set(
+    records
+      .filter(
+        (r) => r.type === "session.started" && r.data.checkout === checkout,
+      )
+      .map((r) => r.replicaId),
+  );
+  const streams = [...replicas].map((replicaId) =>
+    records.filter((r) => r.replicaId === replicaId && r.data.file === file),
+  );
+  const referenced = new Set(
+    streams.flat().flatMap((r) => {
+      const parent = r.data.parent as { replicaId?: string } | undefined;
+      return r.type === "document.baseline" && parent?.replicaId
+        ? [parent.replicaId]
+        : [];
+    }),
+  );
+  const leaves = streams.filter(
+    (stream) => stream.length && !referenced.has(stream[0].replicaId),
+  );
+  if (leaves.length !== 1) return;
+  const stream = leaves[0];
+  const state = projectFile(stream, file, records);
+  if (!state || state.text !== text) return;
+  const last = stream.reduce((a, b) => (a.sequence > b.sequence ? a : b));
+  return {
+    replicaId: last.replicaId,
+    eventId: last.id,
+    digest: evidenceDigest(state),
+  };
 }

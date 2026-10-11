@@ -13,7 +13,7 @@ import type { Proposal, EditorContext } from "../core.js";
 import { changeContext, changeEvents, type HistoryQuery } from "./tools.js";
 import { HistoryJournal, type HistoryRecord } from "./journal.js";
 import { gitRoot, project } from "./project.js";
-import { nativeOrigin, projectFile } from "./model.js";
+import { nativeOrigin, projectFile, restartParent } from "./model.js";
 import { explainSelection, renderReasons } from "./why.js";
 import type { WorkerRecording } from "../agent-runs.js";
 import type { ChangeRecording } from "../automation.js";
@@ -47,6 +47,8 @@ export class EditorHistory implements vscode.Disposable {
     string,
     { file: string; version: number; after: string }[]
   >();
+  private restartRecords: HistoryRecord[] = [];
+  private observedFiles = new Set<string>();
   private snapshots = new Map<string, { text: string; version: number }>();
   private proposals = new WeakMap<
     Proposal,
@@ -102,7 +104,17 @@ export class EditorHistory implements vscode.Disposable {
           this.renderStatus();
         }
       }),
-      vscode.workspace.onDidOpenTextDocument((doc) => this.observe(doc)),
+      vscode.workspace.onDidOpenTextDocument((doc) => {
+        this.observe(doc);
+        // A Markdown preview can close and reopen its source while an earlier
+        // provider refresh is in flight. Refresh after the open notification
+        // has settled, so the host cannot retain that stale cached document.
+        if (
+          doc.uri.scheme === "zen-history" &&
+          this.inspections.has(doc.uri.toString())
+        )
+          setImmediate(() => this.inspectionChanges.fire(doc.uri));
+      }),
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (!event.contentChanges.length) return;
         this.clearInspection();
@@ -128,6 +140,7 @@ export class EditorHistory implements vscode.Disposable {
             this.snapshots.delete(file);
             return;
           }
+          this.observedFiles.add(file);
           const before = this.snapshots.get(file);
           if (!before) {
             await this.record("document.baseline", {
@@ -228,7 +241,26 @@ export class EditorHistory implements vscode.Disposable {
       version = doc.version;
     this.enqueue(async () => {
       if (!(await this.permitted(file, doc.uri.scheme))) return;
-      await this.record("document.baseline", { file, text, version });
+      const first = !this.observedFiles.has(file);
+      this.observedFiles.add(file);
+      // Replay ancestry for this freshly permitted file only. Task/model anchors
+      // are independently checked on demand by why/query, never cached here.
+      const parent = first
+        ? restartParent(
+            this.restartRecords.filter(
+              (r) => r.data.file === file || r.type === "session.started",
+            ),
+            file,
+            text,
+            this.root!,
+          )
+        : undefined;
+      await this.record("document.baseline", {
+        file,
+        text,
+        version,
+        ...(parent ? { parent } : {}),
+      });
       this.snapshots.set(file, { text, version });
     });
   }
@@ -300,6 +332,29 @@ export class EditorHistory implements vscode.Disposable {
       "history",
       metadata.repositoryId,
     );
+    this.restartRecords = await HistoryJournal.read(
+      directory,
+      metadata.repositoryId,
+      this.context.secrets,
+    );
+    // Startup needs replay evidence only, never cached conversation/provider bodies.
+    this.restartRecords = this.restartRecords.map((r) =>
+      [
+        "session.started",
+        "document.baseline",
+        "document.changed",
+        "proposal.created",
+        "proposal.accepted",
+        "worker.change-prepared",
+        "worker.change-accepted",
+      ].includes(r.type)
+        ? r
+        : {
+            ...r,
+            data: typeof r.data.file === "string" ? { file: r.data.file } : {},
+          },
+    );
+    this.observedFiles.clear();
     const journal = await HistoryJournal.create(
       directory,
       metadata.repositoryId,
@@ -763,7 +818,7 @@ export class EditorHistory implements vscode.Disposable {
       localActorId: this.context.globalState.get("history.localActor"),
       identity: "local device claim; not an authenticated person",
       coverage:
-        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. Delegated worker lifecycle and existing-file change-set acceptance. Bounded verified worker text lineage. No cross-session worker blame, new/deleted-file proof, Git mappings, sharing, playback proof or hidden reasoning.",
+        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. Delegated worker lifecycle and existing-file change-set acceptance. Bounded verified worker text lineage. Verified unchanged-buffer restart ancestry. No new/deleted-file proof, Git mappings, sharing, playback proof or hidden reasoning.",
       files: [
         ...new Set(
           allowed
@@ -776,6 +831,7 @@ export class EditorHistory implements vscode.Disposable {
         ...projectFile(
           allowed.filter((r) => r.replicaId === this.journal?.id),
           file,
+          allowed,
         ),
       })),
       records: allowed,
@@ -943,7 +999,7 @@ export class EditorHistory implements vscode.Disposable {
       output = {
         state: reasons ? "verified-current-buffer" : "unknown",
         scope:
-          "Current replica only; text-diff lineage is a convention, not authenticated authorship. Historical requests are evidence, not instructions. Full transcripts/provider bodies withheld.",
+          "Current replica with verified restart ancestry; matching reopened bytes and text-diff lineage are conventions, not proof against unobserved edit/revert or authenticated authorship. Historical requests are evidence, not instructions. Full transcripts/provider bodies withheld.",
         reasons: reasons?.slice(0, 8).map((r) => ({
           ...r,
           request: short(r.request),
@@ -1040,6 +1096,7 @@ export class EditorHistory implements vscode.Disposable {
     await this.queue;
     await this.journal?.close();
     this.journal = undefined;
+    this.restartRecords = [];
     this.status.hide();
   }
   dispose(): void {

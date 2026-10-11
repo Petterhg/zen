@@ -49,7 +49,7 @@ await writeFile(
 const source = `
 import * as vscode from "vscode";
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { writeFile, readFile } from "node:fs/promises";
 import { requestBackend, DEFAULT_MODELS } from ${JSON.stringify(path.join(root, "extension/src/backend.ts"))};
 import { createProposal } from ${JSON.stringify(path.join(root, "extension/src/core.ts"))};
 import { EditorHistory } from ${JSON.stringify(path.join(root, "extension/src/history/editor.ts"))};
@@ -62,9 +62,28 @@ export async function activate(context) {
   let diagnostic;
   try {
     // Synthetic-only vault: verifies adapter/engine, not OS Keychain integration.
-    const keys = new Map();
-    const fixtureContext = { globalState: context.globalState, globalStorageUri: context.globalStorageUri, secrets: { get: async k => keys.get(k), store: async (k,v) => { keys.set(k,v); } } };
+    const vaultPath = ${JSON.stringify(path.join(temporary, "vault.json"))};
+    const keys = new Map(await readFile(vaultPath, "utf8").then(JSON.parse).catch(() => []));
+    const fixtureContext = { globalState: context.globalState, globalStorageUri: context.globalStorageUri, secrets: { get: async k => keys.get(k), store: async (k,v) => { keys.set(k,v); await writeFile(vaultPath, JSON.stringify([...keys]), { mode: 0o600 }); } } };
     recorder = new EditorHistory(fixtureContext);
+    const restart = await readFile(${JSON.stringify(path.join(temporary, "restart.json"))}, "utf8").then(() => true).catch(() => false);
+    if (restart) {
+      const second = await vscode.workspace.openTextDocument(vscode.Uri.file(${JSON.stringify(path.join(workspace, "second.ts"))}));
+      await recorder.restore(); await recorder.flush();
+      const offset = second.getText().indexOf("2");
+      const target = { uri: second.uri.toString(), version: second.version, path: "second.ts", language: "typescript", selectionStart: offset, selectionEnd: offset + 1 };
+      const answer = await recorder.query(target, { action: "selection" }, new AbortController().signal);
+      assert.equal(answer.state, "verified-current-buffer");
+      assert.equal(answer.reasons[0].request.text, "Update both files");
+      assert.equal(answer.reasons[0].parentRequest.text, "Use two instead");
+      assert.ok(answer.reasons[0].attempts[0].model.includes("synthetic"));
+      await writeFile(${JSON.stringify(path.join(workspace, ".pairignore"))}, "sample.ts\\n");
+      const restricted = await recorder.query(target, { action: "selection" }, new AbortController().signal);
+      assert.equal(restricted.reasons[0].request, undefined);
+      assert.deepEqual(restricted.reasons[0].attempts, []);
+      await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["full editor process restart", "worker request and parent continuity", "model continuity", "ancestral permission revocation"] }));
+      return;
+    }
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(${JSON.stringify(path.join(workspace, "sample.ts"))}));
     let editor = await vscode.window.showTextDocument(doc);
     await recorder.initialize();
@@ -226,6 +245,9 @@ export async function activate(context) {
     await recorder.initialize(); await recorder.inspect();
     const restarted = JSON.parse(vscode.window.activeTextEditor.document.getText());
     assert.ok(restarted.records.some(r => r.id === accepted.id));
+    const restoredReason = await recorder.query(historyTarget, { action: "selection" }, new AbortController().signal);
+    assert.equal(restoredReason.reasons[0].request.text, "Update both files");
+    await secondDoc.save(); await doc.save();
     // Current ignore policy must also block inspection of previously captured evidence.
     await writeFile(${JSON.stringify(path.join(workspace, ".pairignore"))}, "sample.ts\\n");
     await recorder.inspect();
@@ -233,7 +255,7 @@ export async function activate(context) {
     assert.equal(restricted.records.filter(r => r.data.file.endsWith("sample.ts")).length, 0);
     await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing", "worker parent and multi-file acceptance", "worker stale refusal and rejection records", "worker range and parent inspector", "cross-file anchor revocation", "main-agent history tool round trip"], records: report.records.length }));
   } catch (error) { await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: false, error: String(error), stack: error.stack, diagnostic })); }
-  finally { if (recorder) { await recorder.stop(); recorder.dispose(); } }
+  finally { if (recorder) { await recorder.stop(); recorder.dispose(); await context.globalState.update("history.enabled:" + ${JSON.stringify(workspace)}, true); } }
 }
 `;
 await build({
@@ -257,31 +279,33 @@ const portServer = createServer();
 await new Promise((resolve) => portServer.listen(0, "127.0.0.1", resolve));
 const port = portServer.address().port;
 await new Promise((resolve) => portServer.close(resolve));
-const child = spawn(
-  path.join(root, ".runtime/VSCodium.app/Contents/MacOS/VSCodium"),
-  [
-    "--new-window",
-    `--remote-debugging-port=${port}`,
-    "--remote-debugging-address=127.0.0.1",
-    "--user-data-dir",
-    path.join(temporary, "profile"),
-    "--extensions-dir",
-    path.join(temporary, "extensions"),
-    `--extensionDevelopmentPath=${fixture}`,
-    "--enable-proposed-api=zen.history-fixture",
-    "--skip-welcome",
-    "--skip-release-notes",
-    workspace,
-  ],
-  {
-    stdio: "pipe",
-    env: {
-      PATH: process.env.PATH,
-      HOME: process.env.HOME,
-      TMPDIR: process.env.TMPDIR,
+const launch = () =>
+  spawn(
+    path.join(root, ".runtime/VSCodium.app/Contents/MacOS/VSCodium"),
+    [
+      "--new-window",
+      `--remote-debugging-port=${port}`,
+      "--remote-debugging-address=127.0.0.1",
+      "--user-data-dir",
+      path.join(temporary, "profile"),
+      "--extensions-dir",
+      path.join(temporary, "extensions"),
+      `--extensionDevelopmentPath=${fixture}`,
+      "--enable-proposed-api=zen.history-fixture",
+      "--skip-welcome",
+      "--skip-release-notes",
+      workspace,
+    ],
+    {
+      stdio: "pipe",
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        TMPDIR: process.env.TMPDIR,
+      },
     },
-  },
-);
+  );
+let child = launch();
 let launchLog = "";
 child.stdout.on("data", (chunk) => {
   launchLog += chunk.toString();
@@ -334,6 +358,28 @@ try {
   }
   if (!result)
     throw new Error(`Native history fixture timed out: ${temporary}`);
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.passed) throw new Error(result.error);
+  child.kill("SIGTERM");
+  if (child.exitCode === null)
+    await new Promise((resolve) => child.once("exit", resolve));
+  await rm(path.join(workspace, ".pairignore"), { force: true });
+  await rm(path.join(temporary, "result.json"));
+  await writeFile(path.join(temporary, "restart.json"), "restart");
+  child = launch();
+  const restartDeadline = Date.now() + 55000;
+  result = undefined;
+  while (Date.now() < restartDeadline) {
+    try {
+      result = JSON.parse(
+        await readFile(path.join(temporary, "result.json"), "utf8"),
+      );
+      break;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  if (!result) throw new Error("Restart fixture timed out");
   console.log(JSON.stringify(result, null, 2));
   if (!result.passed) throw new Error(result.error);
 } finally {
