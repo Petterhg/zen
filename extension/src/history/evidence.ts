@@ -22,6 +22,16 @@ export function sanitizeEvidence(
   if (typeof value === "string") {
     if (/<\/?think>/i.test(value))
       return "[reasoning-bearing content withheld]";
+    // Tool results and structured replies often enter provider messages as JSON strings.
+    // Redact their fields too, without treating arbitrary source text as instructions.
+    if (/^\s*[\[{]/.test(value)) {
+      try {
+        const parsed: unknown = JSON.parse(value);
+        return JSON.stringify(sanitizeEvidence(parsed, secrets));
+      } catch {
+        /* Ordinary text or source; apply string redaction below. */
+      }
+    }
     let text = value;
     for (const secret of secrets)
       if (secret) text = text.split(secret).join("[credential redacted]");

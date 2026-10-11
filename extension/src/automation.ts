@@ -21,6 +21,12 @@ export interface WorkerEnvironment {
   finish(): Promise<string | undefined>;
   dispose(): Promise<void>;
 }
+export interface ChangeRecording {
+  proposed(change: ChangeSet, runId?: string): Promise<void>;
+  prepared(change: ChangeSet): Promise<void>;
+  applied(change: ChangeSet): Promise<void>;
+  rejected(change: ChangeSet): Promise<void>;
+}
 /** Host-owned permissions, task checkouts and review. No webview receives credentials. */
 export class Automation implements vscode.Disposable {
   private changes = new Map<string, ChangeSet>();
@@ -40,6 +46,7 @@ export class Automation implements vscode.Disposable {
     private access: () => boolean,
     private assistance: () => number,
     private changed: () => void,
+    private recording?: ChangeRecording,
   ) {}
   summaries() {
     return [...this.changes.values()].map((c) => ({
@@ -81,6 +88,7 @@ export class Automation implements vscode.Disposable {
     pool: BackendTool[],
     parent: AbortSignal,
     scope?: string,
+    runId?: string,
   ): Promise<WorkerEnvironment> {
     await this.definitions.reload();
     parent.throwIfAborted();
@@ -274,6 +282,7 @@ export class Automation implements vscode.Disposable {
             this.assistance(),
           );
           if (violation) throw new Error(violation);
+          await this.recording?.proposed(change, runId);
           this.changes.set(change.id, change);
           while (this.changes.size > 40)
             this.changes.delete(this.changes.keys().next().value!);
@@ -335,6 +344,7 @@ export class Automation implements vscode.Disposable {
       return;
     }
     if (pick.action === "reject") {
+      await this.recording?.rejected(change);
       change.status = "rejected";
       this.changed();
       return;
@@ -442,6 +452,7 @@ export class Automation implements vscode.Disposable {
           );
       }
     }
+    await this.recording?.prepared(change);
     if (
       !this.access() ||
       this.assistance() === 0 ||
@@ -455,7 +466,12 @@ export class Automation implements vscode.Disposable {
         "The editor could not apply the change set. Inspect files and Undo before retrying.",
       );
     change.status = "accepted";
-    this.changed();
+    try {
+      await this.recording?.applied(change);
+    } finally {
+      // A journal error cannot make already-applied code appear pending again.
+      this.changed();
+    }
   }
   dispose() {
     this.cancel();

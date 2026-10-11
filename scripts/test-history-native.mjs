@@ -53,6 +53,9 @@ import { writeFile } from "node:fs/promises";
 import { requestBackend, DEFAULT_MODELS } from ${JSON.stringify(path.join(root, "extension/src/backend.ts"))};
 import { createProposal } from ${JSON.stringify(path.join(root, "extension/src/core.ts"))};
 import { EditorHistory } from ${JSON.stringify(path.join(root, "extension/src/history/editor.ts"))};
+import { Automation } from ${JSON.stringify(path.join(root, "extension/src/automation.ts"))};
+import { Definitions } from ${JSON.stringify(path.join(root, "extension/src/definitions.ts"))};
+import { DEFAULT_AGENTS } from ${JSON.stringify(path.join(root, "extension/src/subagents.ts"))};
 export async function activate(context) {
   let recorder;
   let diagnostic;
@@ -129,6 +132,46 @@ export async function activate(context) {
     }
     diagnostic = { report, currentWhy: currentWhy.getText(), isClosed: currentWhy.isClosed, contents: [...recorder.inspections], sourceText: doc.getText() };
     assert.ok(currentWhy.getText().includes("cleared"));
+    const workers = recorder.workers(requestId);
+    await workers.started("worker-fixture", "implementer", DEFAULT_AGENTS.explorer, "Update both files", "background", "repo");
+    const secondUri = vscode.Uri.file(${JSON.stringify(path.join(workspace, "second.ts"))});
+    await writeFile(secondUri.fsPath, "export const second = 1;\\n");
+    const secondDoc = await vscode.workspace.openTextDocument(secondUri);
+    await recorder.flush();
+    const changes = recorder.changes();
+    const automation = new Automation(new Definitions(${JSON.stringify(path.join(temporary, "definitions"))}), ${JSON.stringify(path.join(temporary, "tasks"))}, () => true, () => 100, () => {}, changes);
+    const change = { id: "worker-changes", root: ${JSON.stringify(workspace)}, status: "pending", files: [
+      { path: "sample.ts", before: doc.getText(), after: doc.getText() + "// worker change\\n", version: doc.version },
+      { path: "second.ts", before: secondDoc.getText(), after: "export const second = 2;\\n", version: secondDoc.version }
+    ] };
+    await changes.proposed(change, "worker-fixture");
+    await automation.accept(change);
+    assert.equal(change.status, "accepted");
+    await workers.finished("worker-fixture", { summary: "Updated both files" }, change.id);
+    await recorder.inspect();
+    const workerReport = JSON.parse(vscode.window.activeTextEditor.document.getText());
+    const started = workerReport.records.find(r => r.type === "worker.started");
+    const acceptedWorker = workerReport.records.filter(r => r.type === "worker.change-accepted");
+    assert.equal(started.data.parentRequestId, requestId);
+    assert.equal(acceptedWorker.length, 2);
+    assert.ok(acceptedWorker.every(r => r.data.requestId === started.data.requestId && r.data.runId === "worker-fixture"));
+    assert.ok(acceptedWorker.every(r => typeof r.data.body === "string"));
+    const stale = { ...change, id: "stale-worker", status: "pending", files: change.files.map(f => ({ ...f })) };
+    const beforeSecond = secondDoc.getText();
+    await assert.rejects(automation.accept(stale), /changed since/);
+    assert.equal(secondDoc.getText(), beforeSecond);
+    const rejectedChange = { ...change, id: "rejected-worker", status: "pending", files: [
+      { path: "sample.ts", before: doc.getText(), after: doc.getText() + "// rejected", version: doc.version },
+      { path: "second.ts", before: secondDoc.getText(), after: secondDoc.getText() + "// rejected", version: secondDoc.version }
+    ] };
+    await changes.proposed(rejectedChange, "worker-fixture");
+    await changes.rejected(rejectedChange);
+    assert.equal(secondDoc.getText(), beforeSecond);
+    await recorder.inspect();
+    const rejectedReport = JSON.parse(vscode.window.activeTextEditor.document.getText());
+    assert.equal(rejectedReport.records.filter(r => r.type === "worker.change-rejected").length, 2);
+    assert.equal(rejectedReport.records.filter(r => r.type === "worker.change-accepted").length, 2);
+    automation.dispose();
     await recorder.stop(); recorder.dispose();
     recorder = new EditorHistory(fixtureContext);
     await recorder.initialize(); await recorder.inspect();
@@ -139,7 +182,7 @@ export async function activate(context) {
     await recorder.inspect();
     const restricted = JSON.parse(vscode.window.activeTextEditor.document.getText());
     assert.equal(restricted.records.filter(r => r.data.file.endsWith("sample.ts")).length, 0);
-    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing"], records: report.records.length }));
+    await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: true, checks: ["native typing origin", "accepted proposal/request", "saved state", "range attribution", "restart recovery", "ignore revocation", "provider retry/proposal chain", "deduplicated voice fragments", "withheld multi-file bodies", "selection why inspector", "stale inspection clearing", "worker parent and multi-file acceptance", "worker stale refusal and rejection records"], records: report.records.length }));
   } catch (error) { await writeFile(${JSON.stringify(path.join(temporary, "result.json"))}, JSON.stringify({ passed: false, error: String(error), stack: error.stack, diagnostic })); }
   finally { if (recorder) { await recorder.stop(); recorder.dispose(); } }
 }

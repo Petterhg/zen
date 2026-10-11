@@ -4,6 +4,21 @@ import { requestBackend, type BackendTool, type Options } from "./backend.js";
 import type { ResearchAgent, ResearchAgents } from "./subagents.js";
 import type { WorkerEnvironment } from "./automation.js";
 import { redactTrace } from "./trace.js";
+import type { ProviderEvidence } from "./history/evidence.js";
+
+export interface WorkerRecording {
+  started(
+    runId: string,
+    agentId: string,
+    agent: ResearchAgent,
+    task: string,
+    mode: string,
+    scope?: string,
+  ): Promise<void>;
+  provider(runId: string, event: ProviderEvidence): Promise<void>;
+  finished(runId: string, result: unknown, changes?: string): Promise<void>;
+  failed(runId: string, cancelled: boolean): Promise<void>;
+}
 
 export interface AgentRun {
   id: string;
@@ -277,12 +292,14 @@ export function delegationTools(
     agents: () => ResearchAgents;
     key: () => Promise<string | undefined>;
     allowWeb: boolean;
+    recording?: WorkerRecording;
     prepare?: (
       id: string,
       profile: ResearchAgent,
       pool: BackendTool[],
       signal: AbortSignal,
       scope?: string,
+      runId?: string,
     ) => Promise<WorkerEnvironment>;
   },
 ): BackendTool[] {
@@ -405,18 +422,42 @@ export function delegationTools(
                   t.scope,
                   signal,
                   async (workerSignal, log, runId) => {
-                    const environment = await options.prepare?.(
-                      t.id,
-                      t.agent,
-                      (options.tools ?? []).filter(
-                        (tool) =>
-                          t.web ||
-                          !["web_search", "fetch_page"].includes(tool.name),
-                      ),
-                      workerSignal,
-                      t.scope ?? options.context?.file,
+                    // Recording must not turn an ordinary worker result into a provider error.
+                    const observe = async (
+                      action: (() => Promise<void>) | undefined,
+                    ) => {
+                      try {
+                        await action?.();
+                      } catch {
+                        /* recorder reports its own gap */
+                      }
+                    };
+                    await observe(
+                      options.recording &&
+                        (() =>
+                          options.recording!.started(
+                            runId,
+                            t.id,
+                            t.agent,
+                            t.task,
+                            t.mode,
+                            t.scope,
+                          )),
                     );
+                    let environment: WorkerEnvironment | undefined;
                     try {
+                      environment = await options.prepare?.(
+                        t.id,
+                        t.agent,
+                        (options.tools ?? []).filter(
+                          (tool) =>
+                            t.web ||
+                            !["web_search", "fetch_page"].includes(tool.name),
+                        ),
+                        workerSignal,
+                        t.scope ?? options.context?.file,
+                        runId,
+                      );
                       const tools = (environment?.tools ?? options.tools ?? [])
                         .filter(
                           (tool) =>
@@ -466,6 +507,11 @@ export function delegationTools(
                           },
                         }));
                       const result = await requestBackend({
+                        onEvidence: (event) =>
+                          observe(
+                            options.recording &&
+                              (() => options.recording!.provider(runId, event)),
+                          ),
                         provider: "together",
                         model: t.agent.model,
                         apiKey,
@@ -492,12 +538,31 @@ export function delegationTools(
                       });
                       const changes = await environment?.finish();
                       if (changes) runs.attachChanges(runId, changes);
+                      await observe(
+                        options.recording &&
+                          (() =>
+                            options.recording!.finished(
+                              runId,
+                              result,
+                              changes,
+                            )),
+                      );
                       return (
                         result.summary +
                         (changes
                           ? "\nProposed changes are ready in Review changes; they have not been applied."
                           : "")
                       );
+                    } catch (error) {
+                      await observe(
+                        options.recording &&
+                          (() =>
+                            options.recording!.failed(
+                              runId,
+                              workerSignal.aborted,
+                            )),
+                      );
+                      throw error;
                     } finally {
                       await environment?.dispose();
                     }

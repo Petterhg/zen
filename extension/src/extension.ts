@@ -612,6 +612,7 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         this.configuration().get("shareEditorContext", true),
       () => this.assistance(),
       () => this.publishRuns(),
+      this.codeHistory.changes(),
     );
     this.researchBriefs = new ResearchBriefs(context.globalState);
     if (!this.configuration().get("shareEditorContext", true))
@@ -2003,9 +2004,29 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
       if (effortResult.status === "rejected") throw effortResult.reason;
       const memoryReference = memoryResult.value,
         effort = effortResult.value;
+      const historyRequestId = await this.codeHistory.request(
+        context?.uri,
+        latestHuman,
+        {
+          provider,
+          model: DEFAULT_MODELS.cerebras,
+          assistance,
+          requestedEffort: effort,
+          conversationMode: this.conversationMode,
+          voiceSessionToken:
+            delegationId && this.conversationMode === "voice"
+              ? this.sessionToken
+              : undefined,
+          delegationId,
+          transcriptOffsetMs: offsetMs,
+          targetVersion: context?.version,
+          selection: context?.selection,
+        },
+      );
       const workers = delegationTools(this.agentRuns, {
-        prepare: (id, profile, pool, signal, scope) =>
-          this.automation.prepare(id, profile, pool, signal, scope),
+        prepare: (id, profile, pool, signal, scope, runId) =>
+          this.automation.prepare(id, profile, pool, signal, scope, runId),
+        recording: this.codeHistory.workers(historyRequestId),
         agents: () => this.agents(),
         key: () => this.key("together"),
         allowWeb:
@@ -2116,25 +2137,6 @@ class Companion implements vscode.WebviewViewProvider, vscode.Disposable {
         ],
         controller.signal,
         context?.file,
-      );
-      const historyRequestId = await this.codeHistory.request(
-        context?.uri,
-        latestHuman,
-        {
-          provider,
-          model: DEFAULT_MODELS.cerebras,
-          assistance,
-          requestedEffort: effort,
-          conversationMode: this.conversationMode,
-          voiceSessionToken:
-            delegationId && this.conversationMode === "voice"
-              ? this.sessionToken
-              : undefined,
-          delegationId,
-          transcriptOffsetMs: offsetMs,
-          targetVersion: context?.version,
-          selection: context?.selection,
-        },
       );
       let result = await requestBackend({
         onEvidence: (event) =>

@@ -116,7 +116,26 @@ test("generic workers receive only delegated context and safe tools, retain sett
   let agents = { critic: profile },
     requests = 0;
   const calls: Record<string, unknown>[] = [];
+  const recorded: { runId: string; type: string; body?: unknown }[] = [];
   const tools = delegationTools(runs, {
+    recording: {
+      started: async (runId, agentId, agent, task, mode) => {
+        recorded.push({
+          runId,
+          type: "started",
+          body: { agentId, agent, task, mode },
+        });
+      },
+      provider: async (runId, event) => {
+        recorded.push({ runId, type: event.type, body: event });
+      },
+      finished: async (runId, result) => {
+        recorded.push({ runId, type: "finished", body: result });
+      },
+      failed: async (runId) => {
+        recorded.push({ runId, type: "failed" });
+      },
+    },
     agents: () => agents,
     key: async () => "RESEARCH_KEY",
     provider: "cerebras",
@@ -211,6 +230,17 @@ test("generic workers receive only delegated context and safe tools, retain sett
   );
   assert.equal(runs.snapshot()[0].agent.enabled, true);
   assert.equal(calls.length, 2);
+  assert.deepEqual(
+    [...new Set(recorded.map((e) => e.runId))],
+    [runs.snapshot()[0].id],
+  );
+  assert.equal(recorded[0].type, "started");
+  assert.equal(recorded.at(-1)?.type, "finished");
+  assert.equal(recorded.filter((e) => e.type === "provider.request").length, 2);
+  assert.doesNotMatch(
+    JSON.stringify(recorded),
+    /RESEARCH_KEY|PRIVATE_THINKING|NOT_VISIBLE/,
+  );
 });
 
 test("main loop consumes completion notices between calls without restarting the request", async () => {
@@ -304,4 +334,112 @@ test("parent receipts and run lists stay compact while full inspector output rem
     /SOURCE_BODY|User-defined specialization/,
   );
   assert.match(JSON.stringify(runs.detail(job.id)), /SOURCE_BODY/);
+});
+
+test("worker recording failure cannot change execution; preparation failure has a terminal record", async () => {
+  const runs = new AgentRuns();
+  const events: string[] = [];
+  const tools = delegationTools(runs, {
+    agents: () => ({ critic: profile }),
+    key: async () => "synthetic",
+    allowWeb: false,
+    provider: "cerebras",
+    model: "main",
+    apiKey: "synthetic",
+    recording: {
+      started: async () => {
+        events.push("started");
+        throw new Error("history unavailable");
+      },
+      provider: async () => {},
+      finished: async () => {},
+      failed: async (_id, cancelled) => {
+        events.push(cancelled ? "cancelled" : "failed");
+      },
+    },
+    prepare: async () => {
+      throw new Error("workspace denied");
+    },
+  });
+  const result = await tools[0].execute(
+    { tasks: [{ agent: "critic", task: "Inspect", mode: "foreground" }] },
+    new AbortController().signal,
+  );
+  assert.match(JSON.stringify(result), /workspace denied/);
+  assert.deepEqual(events, ["started", "failed"]);
+  assert.equal(runs.snapshot()[0].state, "failed");
+});
+
+test("parallel worker evidence and change sets retain each run identity", async () => {
+  const runs = new AgentRuns();
+  const tasks = new Map<string, string>();
+  const evidence: { runId: string; task: string }[] = [];
+  const tools = delegationTools(runs, {
+    agents: () => ({ critic: profile }),
+    key: async () => "synthetic",
+    allowWeb: false,
+    provider: "cerebras",
+    model: "main",
+    apiKey: "synthetic",
+    recording: {
+      started: async (runId, _id, _agent, task) => {
+        tasks.set(runId, task);
+      },
+      provider: async (runId, event) => {
+        if (event.type === "provider.request") {
+          const body = event.body as {
+            messages: { role: string; content: string }[];
+          };
+          evidence.push({
+            runId,
+            task: body.messages.find((m) => m.role === "user")!.content,
+          });
+        }
+      },
+      finished: async (runId, _result, changes) => {
+        assert.equal(changes, `change-${runId}`);
+      },
+      failed: async () => {
+        assert.fail("worker must succeed");
+      },
+    },
+    prepare: async (_id, _agent, _tools, _signal, _scope, runId) => ({
+      tools: [],
+      finish: async () => `change-${runId}`,
+      dispose: async () => {},
+    }),
+    fetchImpl: async () =>
+      Response.json({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: JSON.stringify({
+                status: "answer",
+                summary: "Done",
+                edits: [],
+              }),
+            },
+          },
+        ],
+      }),
+  });
+  await tools[0].execute(
+    {
+      tasks: [
+        { agent: "critic", task: "First", mode: "foreground" },
+        { agent: "critic", task: "Second", mode: "background" },
+      ],
+    },
+    new AbortController().signal,
+  );
+  const deadline = Date.now() + 2000;
+  while (runs.activeCount() && Date.now() < deadline) await tick();
+  assert.equal(runs.activeCount(), 0);
+  assert.equal(tasks.size, 2);
+  assert.equal(evidence.length, 2);
+  for (const event of evidence)
+    assert.equal(tasks.get(event.runId), event.task);
+  for (const run of runs.snapshot())
+    assert.equal(run.changes, `change-${run.id}`);
 });

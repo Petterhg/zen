@@ -14,6 +14,8 @@ import { HistoryJournal, type HistoryRecord } from "./journal.js";
 import { gitRoot, project } from "./project.js";
 import { nativeOrigin, projectFile } from "./model.js";
 import { explainSelection, renderReasons } from "./why.js";
+import type { WorkerRecording } from "../agent-runs.js";
+import type { ChangeRecording } from "../automation.js";
 
 /** Local opt-in recorder. Unsupported edits stay unknown; no timing-based attribution. */
 export class EditorHistory implements vscode.Disposable {
@@ -26,6 +28,24 @@ export class EditorHistory implements vscode.Disposable {
   private stopped = false;
   private requests = new Map<string, { file: string; invocations: string[] }>();
   private transcriptIds = new Set<string>();
+  private workerRequests = new Map<string, string>();
+  private changeRecords = new Map<
+    string,
+    {
+      runId: string;
+      requestId: string;
+      files: {
+        file: string;
+        before: string;
+        after: string;
+        version?: number;
+      }[];
+    }
+  >();
+  private preparedChanges = new Map<
+    string,
+    { file: string; version: number; after: string }[]
+  >();
   private snapshots = new Map<string, { text: string; version: number }>();
   private proposals = new WeakMap<
     Proposal,
@@ -269,6 +289,9 @@ export class EditorHistory implements vscode.Disposable {
     this.failure = undefined;
     this.snapshots.clear();
     this.requests.clear();
+    this.workerRequests.clear();
+    this.changeRecords.clear();
+    this.preparedChanges.clear();
     this.transcriptIds.clear();
     const metadata = await project(root);
     const directory = path.join(
@@ -295,7 +318,7 @@ export class EditorHistory implements vscode.Disposable {
       actorId,
       identity: "local device claim; not an authenticated person",
       coverage:
-        "open permitted text buffers, main backend attempts/results and received voice fragments; no filesystem, worker or Git capture",
+        "open permitted text buffers, main backend attempts/results and received voice fragments; delegated worker attempts and existing-file review acceptance; no arbitrary filesystem or Git capture",
     });
     for (const doc of vscode.workspace.textDocuments) this.observe(doc);
     await this.flush();
@@ -372,6 +395,191 @@ export class EditorHistory implements vscode.Disposable {
     } catch {
       /* Recorder status already reports the gap; do not disrupt ordinary answers. */
     }
+  }
+  /** Parent IDs are captured per dispatch; concurrent/background jobs never consult a latest request. */
+  workers(parentRequestId: string | undefined): WorkerRecording {
+    return {
+      started: async (runId, agentId, agent, task, mode, scope) => {
+        const parent = parentRequestId && this.requests.get(parentRequestId);
+        if (!parent || !(await this.permitted(parent.file))) return;
+        const requestId = await this.request(
+          vscode.Uri.file(parent.file).toString(),
+          task,
+          {
+            parentRequestId,
+            runId,
+            agentId,
+            provider: "together",
+            model: agent.model,
+            requestedEffort: agent.reasoningEffort,
+            conversationMode: "worker",
+          },
+        );
+        if (!requestId) return;
+        this.workerRequests.set(runId, requestId);
+        await this.record("worker.started", {
+          file: parent.file,
+          parentRequestId,
+          requestId,
+          runId,
+          agentId,
+          mode,
+          body: sanitizeEvidence({ task, scope, agent }),
+          coverage:
+            "worker entered execution; queue timing and tool call bodies not captured",
+        });
+      },
+      provider: async (runId, event) =>
+        this.provider(this.workerRequests.get(runId), event),
+      finished: async (runId, result, changes) => {
+        const requestId = this.workerRequests.get(runId);
+        await this.result(requestId, result);
+        const request = requestId && this.requests.get(requestId);
+        if (request && (await this.permitted(request.file)))
+          await this.record("worker.finished", {
+            file: request.file,
+            requestId,
+            runId,
+            changeSetId: changes,
+            state: "completed; editor application not implied",
+          });
+      },
+      failed: async (runId, cancelled) => {
+        const requestId = this.workerRequests.get(runId);
+        const request = requestId && this.requests.get(requestId);
+        if (request && (await this.permitted(request.file)))
+          await this.record("worker.finished", {
+            file: request.file,
+            requestId,
+            runId,
+            state: cancelled ? "cancelled" : "failed",
+          });
+      },
+    };
+  }
+  changes(): ChangeRecording {
+    return {
+      proposed: async (change, runId) => {
+        const requestId = runId && this.workerRequests.get(runId);
+        if (!runId || !requestId || !this.enabled()) return;
+        const files = [];
+        for (const item of change.files) {
+          // First acceptance proof covers existing-file replacements only.
+          if (item.before === undefined || item.after === undefined) continue;
+          const file = path.join(change.root, item.path);
+          if (!(await this.permitted(file))) continue;
+          files.push({
+            file,
+            before: item.before,
+            after: item.after,
+            version: item.version,
+          });
+          await this.record("worker.change-proposed", {
+            file,
+            runId,
+            requestId,
+            changeSetId: change.id,
+            body: sanitizeEvidence({ before: item.before, after: item.after }),
+            coverage:
+              "isolated proposed replacement; not applied, not line attribution",
+          });
+        }
+        this.changeRecords.set(change.id, { runId, requestId, files });
+      },
+      prepared: async (change) => {
+        const captured = this.changeRecords.get(change.id);
+        if (!captured || !this.enabled()) return;
+        await this.flush();
+        const prepared = [];
+        for (const item of captured.files) {
+          if (!(await this.permitted(item.file))) continue;
+          const proposed = change.files.find(
+            (f) => path.join(change.root, f.path) === item.file,
+          );
+          if (
+            !proposed ||
+            proposed.before !== item.before ||
+            proposed.after !== item.after
+          )
+            throw new Error(
+              "Recorded change set no longer matches the proposed files.",
+            );
+          const doc = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(item.file),
+          );
+          if (
+            doc.getText() !== item.before ||
+            (item.version !== undefined && doc.version !== item.version)
+          )
+            throw new Error(
+              "Recorded worker target is stale. Nothing was applied.",
+            );
+          prepared.push({
+            file: item.file,
+            version: doc.version,
+            after: item.after,
+          });
+          await this.record("worker.change-prepared", {
+            file: item.file,
+            runId: captured.runId,
+            requestId: captured.requestId,
+            changeSetId: change.id,
+            beforeVersion: doc.version,
+            body: sanitizeEvidence({ expectedText: item.after }),
+          });
+        }
+        this.preparedChanges.set(change.id, prepared);
+      },
+      applied: async (change) => {
+        const captured = this.changeRecords.get(change.id);
+        const prepared = this.preparedChanges.get(change.id);
+        if (!captured || !prepared) return;
+        // Snapshot synchronously before flushing queued document events.
+        const observed = prepared.map((item) => {
+          const doc = vscode.workspace.textDocuments.find(
+            (d) => d.uri.fsPath === item.file && d.uri.scheme === "file",
+          );
+          return { ...item, text: doc?.getText(), afterVersion: doc?.version };
+        });
+        await this.flush();
+        for (const item of observed) {
+          if (!(await this.permitted(item.file))) continue;
+          const verified =
+            item.text === item.after && item.afterVersion === item.version + 1;
+          await this.record(
+            verified ? "worker.change-accepted" : "worker.change-unverified",
+            {
+              file: item.file,
+              runId: captured.runId,
+              requestId: captured.requestId,
+              changeSetId: change.id,
+              beforeVersion: item.version,
+              version: item.afterVersion,
+              body: verified
+                ? sanitizeEvidence({ text: item.text })
+                : undefined,
+              state: verified
+                ? "verified applied buffer; saving not implied"
+                : "application reported; complete buffer/version proof missing",
+            },
+          );
+        }
+        this.preparedChanges.delete(change.id);
+      },
+      rejected: async (change) => {
+        const captured = this.changeRecords.get(change.id);
+        if (!captured) return;
+        for (const item of captured.files)
+          if (await this.permitted(item.file))
+            await this.record("worker.change-rejected", {
+              file: item.file,
+              runId: captured.runId,
+              requestId: captured.requestId,
+              changeSetId: change.id,
+            });
+        this.preparedChanges.delete(change.id);
+      },
+    };
   }
   conversation(
     file: string | undefined,
@@ -530,6 +738,7 @@ export class EditorHistory implements vscode.Disposable {
       )
         allowed.push(
           record.type.startsWith("provider.") ||
+            record.type.startsWith("worker.") ||
             record.type === "backend.result" ||
             record.type === "voice.transcript.fragment"
             ? { ...record, data: inspectEvidence(record.data) }
@@ -550,7 +759,7 @@ export class EditorHistory implements vscode.Disposable {
       localActorId: this.context.globalState.get("history.localActor"),
       identity: "local device claim; not an authenticated person",
       coverage:
-        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. No Git mappings, worker capture, sharing, playback proof or hidden reasoning.",
+        "Local open buffers, main provider attempts/results, received voice fragments and accepted single-file previews. Multi-file bodies withheld from inspection. Delegated worker lifecycle and existing-file change-set acceptance. No worker line blame, new/deleted-file proof, Git mappings, sharing, playback proof or hidden reasoning.",
       files: [
         ...new Set(
           allowed
